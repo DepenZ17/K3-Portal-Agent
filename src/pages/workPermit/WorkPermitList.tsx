@@ -20,6 +20,8 @@ const DUMMY_PERMITS: WorkPermitListItem[] = [
     status: "SUBMITTED",
     createdBy: "subcon_inti",
     canClose: false,
+    hasBeforePhotos: false,
+    hasAfterPhotos: false,
   },
   {
     id: 102,
@@ -30,6 +32,8 @@ const DUMMY_PERMITS: WorkPermitListItem[] = [
     status: "VERIFIED",
     createdBy: "subcon_inti",
     canClose: false,
+    hasBeforePhotos: true,
+    hasAfterPhotos: false,
   },
   {
     id: 103,
@@ -40,6 +44,8 @@ const DUMMY_PERMITS: WorkPermitListItem[] = [
     status: "APPROVED",
     createdBy: "subcon_inti",
     canClose: true,
+    hasBeforePhotos: true,
+    hasAfterPhotos: true,
   },
   {
     id: 104,
@@ -50,6 +56,8 @@ const DUMMY_PERMITS: WorkPermitListItem[] = [
     status: "CLOSED",
     createdBy: "subcon_mitra",
     canClose: false,
+    hasBeforePhotos: true,
+    hasAfterPhotos: true,
   },
   {
     id: 105,
@@ -60,6 +68,8 @@ const DUMMY_PERMITS: WorkPermitListItem[] = [
     status: "SUBMITTED",
     createdBy: "subcon_mitra",
     canClose: false,
+    hasBeforePhotos: false,
+    hasAfterPhotos: false,
   },
 ];
 
@@ -237,11 +247,11 @@ export default function WorkPermitList() {
     }
   };
 
-  /** SHE Officer: verifikasi */
+  /** HSE Officer: verifikasi */
   const handleVerify = async (permit: WorkPermitListItem) => {
     if (
       !confirm(
-        `Verifikasi izin kerja #${permit.id}? Tindakan ini hanya untuk SHE Officer.`
+        `Verifikasi izin kerja #${permit.id}? Tindakan ini hanya untuk HSE Officer.`
       )
     ) {
       return;
@@ -267,7 +277,7 @@ export default function WorkPermitList() {
   const handleApprove = async (permit: WorkPermitListItem) => {
     if (
       !confirm(
-        `Approve izin kerja #${permit.id}? Pastikan sudah diverifikasi SHE Officer.`
+        `Approve izin kerja #${permit.id}? Pastikan sudah diverifikasi HSE Officer.`
       )
     ) {
       return;
@@ -298,7 +308,7 @@ export default function WorkPermitList() {
         <div>
           <h1 className="h4 mb-1">Daftar Izin Kerja</h1>
           <p className="text-muted mb-0" style={{ fontSize: 14 }}>
-            Subcontractor mengajukan izin kerja. SHE Officer melakukan verifikasi, Project
+            Subcontractor mengajukan izin kerja. HSE Officer melakukan verifikasi, Project
             Manager melakukan persetujuan, dan Subcontractor menutup izin setelah
             pekerjaan selesai.
           </p>
@@ -356,7 +366,7 @@ export default function WorkPermitList() {
                 <tbody>
                   {visiblePermits.map((permit) => {
                     const hasWorkflowAction =
-                      (role === "she_officer" && permit.status === "SUBMITTED") ||
+                      (role === "hse_officer" && permit.status === "SUBMITTED") ||
                       (role === "project_manager" && permit.status === "VERIFIED") ||
                       canCloseUi(permit);
 
@@ -386,8 +396,8 @@ export default function WorkPermitList() {
                             Print
                           </button>
 
-                          {/* SHE Officer: Verifikasi */}
-                          {role === "she_officer" && permit.status === "SUBMITTED" && (
+                          {/* HSE Officer: Verifikasi */}
+                          {role === "hse_officer" && permit.status === "SUBMITTED" && (
                             <button
                               className="btn btn-outline-warning btn-sm me-2"
                               onClick={() => handleVerify(permit)}

@@ -51,10 +51,14 @@ const dummyHiraList: HiraItem[] = [
 
 export default function HiraList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuth(); // Ambil data user dari AuthContext
   const [hiraList, setHiraList] = useState<HiraItem[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+
+  // User Check Rules
+  const canCreateHira = user?.role === "hse_officer" || user?.role === "hse_coordinator" || user?.role === "project_manager";
+  const userRoleDisplay = user?.role ? user.role.toUpperCase().replace("_", " ") : "GUEST";
 
   const fetchHiras = async () => {
     setIsLoading(true);
@@ -99,17 +103,30 @@ export default function HiraList() {
       {/* Header Halaman */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-          <h1 className="h3 fw-bold text-dark mb-1">Daftar Dokumen HIRA / HIRADC</h1>
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <h1 className="h3 fw-bold text-dark mb-0">Daftar Dokumen HIRA / HIRADC</h1>
+            <span className="badge bg-info-subtle text-info border border-info-subtle">
+              Role: {userRoleDisplay}
+            </span>
+          </div>
           <p className="text-muted small mb-0">
             Hazard Identification, Risk Assessment, and Risk Control Management
           </p>
         </div>
-        <button
-          className="btn btn-success fw-bold d-flex align-items-center justify-content-center gap-2"
-          onClick={() => navigate("/hira/create")}
-        >
-          <span>+ Buat HIRA Baru</span>
-        </button>
+
+        {/* User Check: Tombol hanya tampil jika user memiliki wewenang */}
+        {canCreateHira ? (
+          <button
+            className="btn btn-success fw-bold d-flex align-items-center justify-content-center gap-2"
+            onClick={() => navigate("/hira/create")}
+          >
+            <span>+ Buat HIRA Baru</span>
+          </button>
+        ) : (
+          <div className="text-muted small italic">
+            * Mode lihat saja (Read-only)
+          </div>
+        )}
       </div>
 
       {/* Filter & Search Bar */}
