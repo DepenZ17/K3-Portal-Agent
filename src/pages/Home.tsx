@@ -12,7 +12,7 @@ export default function Home() {
 
   const isSubcontractor = currentRole === "subcontractor";
   
-  // Penyesuaian Role K3 (mengganti awalan she_ menjadi hse_)
+  // Penyesuaian Role K3 
   const isK3Role = [
     "subcontractor",
     "hse_officer",
@@ -44,21 +44,7 @@ export default function Home() {
         <div className="col-12 col-sm-6 col-lg-3">
           <CardMenu
             title="HIRA / HIRADC"
-            onClick={() => navigate("/jsa")}
-          />
-        </div>
-
-        <div className="col-12 col-sm-6 col-lg-3">
-          <CardMenu
-            title="Equipment & APD"
-            onClick={() => navigate("/equipment")}
-          />
-        </div>
-
-        <div className="col-12 col-sm-6 col-lg-3">
-          <CardMenu
-            title="Rule & Law"
-            onClick={() => navigate("/rules")}
+            onClick={() => navigate("/hira")}
           />
         </div>
 
@@ -81,6 +67,28 @@ export default function Home() {
             />
           </div>
         )}
+
+        {/* 🟢 Modul Audit Trail */}
+        <div className="col-12 col-sm-6 col-lg-3">
+          <CardMenu
+            title="Audit Log"
+            onClick={() => navigate("/audit")}
+          />
+        </div>
+
+        <div className="col-12 col-sm-6 col-lg-3">
+          <CardMenu
+            title="Equipment & APD"
+            onClick={() => navigate("/equipment")}
+          />
+        </div>
+
+        <div className="col-12 col-sm-6 col-lg-3">
+          <CardMenu
+            title="Rule & Law"
+            onClick={() => navigate("/rules")}
+          />
+        </div>
       </div>
 
       {/* Panel Utama 2 Kolom Berdampingan Simetris */}

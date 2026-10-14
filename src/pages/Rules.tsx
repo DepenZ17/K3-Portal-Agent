@@ -8,10 +8,10 @@ export default function Rules() {
   
   // Memasukkan 4 role lain selain subcontractor yang memiliki hak akses edit
   const canEdit = [
-    "she_officer",
-    "she_coordinator",
-    "supervisor",
-    "project_manager"
+    "hse_officer",
+    "project_manager",
+    "hse_coordinator",
+    "supervisor"
   ].includes(currentRole);
 
   return (
@@ -19,8 +19,8 @@ export default function Rules() {
       <h1 className="h4 mb-2">Rule &amp; Law K3 Proyek</h1>
       <p className="text-muted mb-4" style={{ fontSize: 14 }}>
         Halaman ini merangkum regulasi, standar, dan prosedur K3 yang menjadi
-        dasar penerapan Izin Kerja Pekerjaan Berisiko Tinggi. Foreman dapat
-        menggunakan halaman ini sebagai referensi, sementara SHE Officer dan
+        dasar penerapan Izin Kerja Pekerjaan Berisiko Tinggi. Subcontractor dapat
+        menggunakan halaman ini sebagai referensi, sementara HSE Officer dan
         Project Manager menggunakannya sebagai acuan verifikasi dan persetujuan.
       </p>
 
@@ -119,7 +119,7 @@ export default function Rules() {
                   Izin Kerja harus diisi dan APD tertentu wajib digunakan.
                 </li>
                 <li>
-                  <strong>SHE Officer</strong> – memastikan verifikasi mengacu
+                  <strong>HSE Officer</strong> – memastikan verifikasi mengacu
                   pada prosedur dan peraturan yang tertulis, bukan hanya
                   kebiasaan di lapangan.
                 </li>
@@ -136,7 +136,7 @@ export default function Rules() {
                 <ul className="mb-0" style={{ fontSize: 13, paddingLeft: 18 }}>
                   <li>Semua role dapat melihat daftar dokumen.</li>
                   <li>
-                    Hanya <strong>SHE Officer</strong> dan{" "}
+                    Hanya <strong>HSE Officer</strong> dan{" "}
                     <strong>Project Manager</strong> yang dapat menambah atau
                     memperbarui daftar dokumen di sistem.
                   </li>
@@ -153,7 +153,7 @@ export default function Rules() {
               )}
               {!canEdit && (
                 <small className="text-muted d-block mt-1" style={{ fontSize: 12 }}>
-                  Untuk perubahan daftar dokumen, silakan hubungi SHE Officer
+                  Untuk perubahan daftar dokumen, silakan hubungi HSE Officer
                   atau Project Manager.
                 </small>
               )}

@@ -1,4 +1,4 @@
-// App.tsx
+// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
 
@@ -6,6 +6,8 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import HiraList from "./pages/hira/HiraList";
 import HiraForm from "./pages/hira/HiraForm";
+import HiraDetail from "./pages/hira/HiraDetail";
+import AuditTrail from "./pages/AuditTrail";
 import Equipment from "./pages/Equipment";
 import Rules from "./pages/Rules";
 import WorkPermitList from "./pages/workPermit/WorkPermitList";
@@ -55,15 +57,15 @@ function App() {
           }
         />
 
-        {/* HIRA List: Dapat diakses oleh semua role utama */}
+        {/* HIRA List */}
         <Route
           path="/hira"
           element={
             <ProtectedRoute
               allowedRoles={[
                 "subcontractor",
-                "hse_officer",      // 🟢 Perbaikan typo: hse_officer
-                "hse_coordinator",  // 🟢 Perbaikan typo: hse_coordinator
+                "hse_officer",
+                "hse_coordinator",
                 "supervisor",
                 "project_manager",
               ]}
@@ -80,7 +82,11 @@ function App() {
           path="/hira/create"
           element={
             <ProtectedRoute
-              allowedRoles={["hse_officer", "hse_coordinator", "supervisor", "project_manager"]} // 🟢 Perbaikan typo
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+              ]}
             >
               <AppLayout>
                 <HiraForm />
@@ -89,9 +95,63 @@ function App() {
           }
         />
 
-        {/* Redirect backward-compatibility dari /jsa ke /hira */}
-        <Route path="/jsa" element={<Navigate to="/hira" replace />} />
-        <Route path="/jsa/new" element={<Navigate to="/hira/create" replace />} />
+        {/* HIRA Form (Edit) */}
+        <Route
+          path="/hira/edit/:id"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+              ]}
+            >
+              <AppLayout>
+                <HiraForm />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* HIRA Detail & Approval Actions */}
+        <Route
+          path="/hira/:id"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+                "supervisor",
+                "project_manager",
+              ]}
+            >
+              <AppLayout>
+                <HiraDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Audit Trail */}
+        <Route
+          path="/audit"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+                "supervisor",
+                "project_manager",
+              ]}
+            >
+              <AppLayout>
+                <AuditTrail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Equipment */}
         <Route
@@ -112,8 +172,8 @@ function App() {
             <ProtectedRoute
               allowedRoles={[
                 "subcontractor",
-                "hse_officer",      // 🟢 Perbaikan typo
-                "hse_coordinator",  // 🟢 Perbaikan typo
+                "hse_officer",
+                "hse_coordinator",
                 "supervisor",
                 "project_manager",
               ]}
@@ -124,6 +184,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        
 
         {/* MENU UTAMA IZIN KERJA (Khusus Subkontraktor untuk membuat izin baru) */}
         <Route
@@ -144,8 +206,8 @@ function App() {
             <ProtectedRoute
               allowedRoles={[
                 "subcontractor",
-                "hse_officer",      // 🟢 Perbaikan typo
-                "hse_coordinator",  // 🟢 Perbaikan typo
+                "hse_officer",
+                "hse_coordinator",
                 "supervisor",
                 "project_manager",
               ]}
@@ -164,8 +226,8 @@ function App() {
             <ProtectedRoute
               allowedRoles={[
                 "subcontractor",
-                "hse_officer",      // 🟢 Perbaikan typo
-                "hse_coordinator",  // 🟢 Perbaikan typo
+                "hse_officer",
+                "hse_coordinator",
                 "supervisor",
                 "project_manager",
               ]}
@@ -184,8 +246,8 @@ function App() {
             <ProtectedRoute
               allowedRoles={[
                 "subcontractor",
-                "hse_officer",      // 🟢 Perbaikan typo
-                "hse_coordinator",  // 🟢 Perbaikan typo
+                "hse_officer",
+                "hse_coordinator",
                 "supervisor",
                 "project_manager",
               ]}

@@ -1,39 +1,124 @@
 // src/services/api.ts
-import axios from "axios";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
-// Axios instance untuk akses API Django (baseURL dari env)
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://hse-construction-backend.onrender.com/api";
+
 const api = axios.create({
-  // Set di .env / Vercel: VITE_API_BASE_URL=https://hse-construction-backend.onrender.com/api
-  baseURL: import.meta.env.VITE_API_BASE_URL || "https://hse-construction-backend.onrender.com/api",
-  timeout: 15000, // Waktu tunggu maksimal 15 detik
+  baseURL: API_BASE_URL,
+  timeout: 15000,
 });
 
-// Tambahkan Bearer token ke setiap request jika tersimpan di localStorage
-api.interceptors.request.use((config) => {
-  // Disinkronkan dengan key 'accessToken' pada AuthContext.tsx
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
+// Sisipkan Access Token ke setiap Request (Kecuali endpoint Login)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const isLoginRequest = config.url?.includes("/users/login/");
+
+  if (!isLoginRequest) {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
+
   return config;
 });
 
-// Penanganan global saat response error
+let isRefreshing = false;
+
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: unknown) => void;
+}> = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
+
+// Handle Interceptor 401 & Auto Refresh Token
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    // Jika 401 (Unauthorized): Hapus token & user, lalu alihkan ke halaman login
-    if (err?.response?.status === 401) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
+  async (err: AxiosError) => {
+    const originalRequest = err.config;
+    const isLoginRequest = originalRequest?.url?.includes("/users/login/");
 
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+    if (
+      err?.response?.status === 401 &&
+      originalRequest &&
+      !("_retry" in originalRequest) &&
+      !isLoginRequest
+    ) {
+      const refreshToken = localStorage.getItem("refreshToken");
+
+      if (!refreshToken) {
+        clearAuthAndRedirect();
+        return Promise.reject(err);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return api(originalRequest);
+          })
+          .catch((refreshErr: unknown) => Promise.reject(refreshErr));
+      }
+
+      (originalRequest as unknown as { _retry: boolean })._retry = true;
+      isRefreshing = true;
+
+      try {
+        const response = await axios.post(`${API_BASE_URL}/users/token/refresh/`, {
+          refresh: refreshToken,
+        });
+
+        const newAccessToken = response.data.access;
+        const newRefreshToken = response.data.refresh;
+
+        localStorage.setItem("accessToken", newAccessToken);
+        if (newRefreshToken) {
+          localStorage.setItem("refreshToken", newRefreshToken);
+        }
+
+        api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
+
+        processQueue(null, newAccessToken);
+        return api(originalRequest);
+      } catch (refreshError: unknown) {
+        processQueue(refreshError, null);
+        clearAuthAndRedirect();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
     return Promise.reject(err);
   }
 );
+
+function clearAuthAndRedirect() {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
 
 export default api;

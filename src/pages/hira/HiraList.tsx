@@ -1,219 +1,220 @@
 // src/pages/hira/HiraList.tsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../hooks/useAuth";
-import api from "../../services/api";
-
-export interface HiraItem {
-  id: string | number;
-  title: string;
-  location: string;
-  department: string;
-  assessor: string;
-  assessmentDate: string;
-  status: "Draft" | "Pending Review" | "Approved" | "Rejected";
-  highRiskCount: number;
-}
-
-// Mock Data untuk fallback / mode demo sebelum backend terhubung
-const dummyHiraList: HiraItem[] = [
-  {
-    id: "1",
-    title: "Pekerjaan Galian & Pondasi Area B",
-    location: "Zona Crane 1",
-    department: "PT Konstruksi Utama",
-    assessor: "Ahmad Subagio",
-    assessmentDate: "2026-09-20",
-    status: "Approved",
-    highRiskCount: 1,
-  },
-  {
-    id: "2",
-    title: "Ereksi Struktur Baja Lantai 5",
-    location: "Gedung Utama",
-    department: "PT Mega Steel",
-    assessor: "Budi Santoso",
-    assessmentDate: "2026-09-25",
-    status: "Pending Review",
-    highRiskCount: 3,
-  },
-  {
-    id: "3",
-    title: "Pengelasan & Pemasangan Pipa Gas",
-    location: "Basement 2",
-    department: "Subkon Piping",
-    assessor: "Dedi Setiadi",
-    assessmentDate: "2026-09-27",
-    status: "Draft",
-    highRiskCount: 0,
-  },
-];
+import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import { getHiraDocuments, getActiveProjectOptions } from "../../services/hiraServices";
+import type { HiraDocumentList, HiraStatus, ProjectOption } from "../../types/hira";
 
 export default function HiraList() {
-  const navigate = useNavigate();
-  const { user } = useAuth(); // Ambil data user dari AuthContext
-  const [hiraList, setHiraList] = useState<HiraItem[]>([]);
-  const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [documents, setDocuments] = useState<HiraDocumentList[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  
+  // State Filter
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
 
-  // User Check Rules
-  const canCreateHira = user?.role === "hse_officer" || user?.role === "hse_coordinator" || user?.role === "project_manager";
-  const userRoleDisplay = user?.role ? user.role.toUpperCase().replace("_", " ") : "GUEST";
+  // UI State
+  const [loading, setLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-  const fetchHiras = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.get("/hira/");
-      setHiraList(response.data);
-    } catch (error) {
-      console.warn("Gagal mengambil data dari API, menggunakan Mock Data Demo.", error);
-      setHiraList(dummyHiraList);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Load daftar project untuk dropdown filter
   useEffect(() => {
-    fetchHiras();
+    const fetchProjects = async () => {
+      try {
+        const data = await getActiveProjectOptions();
+        setProjects(data);
+      } catch (err: unknown) {
+        console.error("Gagal memuat daftar project", err);
+      }
+    };
+    fetchProjects();
   }, []);
 
-  // Filter pencarian berdasarkan Judul, Lokasi, atau Assessor
-  const filteredList = hiraList.filter(
-    (item) =>
-      item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.location.toLowerCase().includes(search.toLowerCase()) ||
-      item.assessor.toLowerCase().includes(search.toLowerCase())
-  );
+  // Load daftar HIRA berdasarkan filter
+  const fetchHiraList = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage("");
 
-  const getStatusBadge = (status: HiraItem["status"]) => {
-    switch (status) {
-      case "Approved":
-        return <span className="badge bg-success">Approved</span>;
-      case "Pending Review":
-        return <span className="badge bg-warning text-dark">Pending Review</span>;
-      case "Rejected":
-        return <span className="badge bg-danger">Rejected</span>;
-      default:
-        return <span className="badge bg-secondary">Draft</span>;
+    try {
+      const data = await getHiraDocuments({
+        project: selectedProject || undefined,
+        status: (selectedStatus as HiraStatus) || undefined,
+      });
+      setDocuments(data);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail || "Gagal memuat dokumen HIRA.";
+        setErrorMessage(detail);
+      } else {
+        setErrorMessage("Gagal terhubung ke server backend.");
+      }
+    } finally {
+      setLoading(false);
     }
+  }, [selectedProject, selectedStatus]);
+
+  useEffect(() => {
+    fetchHiraList();
+  }, [fetchHiraList]);
+
+  // Utility untuk Badge Warna Status HIRA
+  const renderStatusBadge = (status: HiraStatus) => {
+    const badgeMap: Record<HiraStatus, { label: string; bg: string }> = {
+      draft: { label: "Draft", bg: "bg-secondary" },
+      pending_officer: { label: "Menunggu HSE Officer", bg: "bg-warning text-dark" },
+      pending_pm: { label: "Menunggu Project Manager", bg: "bg-info text-dark" },
+      approved: { label: "Disetujui", bg: "bg-success" },
+      rejected: { label: "Ditolak", bg: "bg-danger" },
+      cancelled: { label: "Dibatalkan", bg: "bg-dark" },
+    };
+
+    const config = badgeMap[status] || { label: status, bg: "bg-secondary" };
+    return <span className={`badge ${config.bg}`}>{config.label}</span>;
   };
 
   return (
     <div className="container py-4">
-      {/* Header Halaman */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+      {/* Header & Button Create */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <h1 className="h3 fw-bold text-dark mb-0">Daftar Dokumen HIRA / HIRADC</h1>
-            <span className="badge bg-info-subtle text-info border border-info-subtle">
-              Role: {userRoleDisplay}
-            </span>
-          </div>
-          <p className="text-muted small mb-0">
-            Hazard Identification, Risk Assessment, and Risk Control Management
-          </p>
+          <h2 className="fw-bold mb-1">Daftar Dokumen HIRA</h2>
+          <p className="text-muted small mb-0">Hazard Identification and Risk Assessment</p>
         </div>
-
-        {/* User Check: Tombol hanya tampil jika user memiliki wewenang */}
-        {canCreateHira ? (
-          <button
-            className="btn btn-success fw-bold d-flex align-items-center justify-content-center gap-2"
-            onClick={() => navigate("/hira/create")}
-          >
-            <span>+ Buat HIRA Baru</span>
-          </button>
-        ) : (
-          <div className="text-muted small italic">
-            * Mode lihat saja (Read-only)
-          </div>
-        )}
+        <Link to="/hira/create" className="btn btn-success fw-semibold shadow-sm">
+          + Buat HIRA Baru
+        </Link>
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* Filter Section */}
       <div className="card border-0 shadow-sm rounded-3 mb-4">
-        <div className="card-body p-3">
-          <div className="row g-2 align-items-center">
-            <div className="col-12 col-md-6 col-lg-4">
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Cari judul, lokasi, atau penilai..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+        <div className="card-body bg-light rounded-3">
+          <div className="row g-3">
+            
+            {/* Filter Project */}
+            <div className="col-md-5">
+              <label className="form-label fw-semibold small text-secondary">FILTER PROYEK</label>
+              <select
+                className="form-select"
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+              >
+                <option value="">Semua Proyek</option>
+                {projects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="col-12 col-md-auto ms-auto text-muted small">
-              Total Dokumen: <strong>{filteredList.length}</strong>
+
+            {/* Filter Status */}
+            <div className="col-md-5">
+              <label className="form-label fw-semibold small text-secondary">FILTER STATUS</label>
+              <select
+                className="form-select"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+              >
+                <option value="">Semua Status</option>
+                <option value="draft">Draft</option>
+                <option value="pending_officer">Menunggu HSE Officer</option>
+                <option value="pending_pm">Menunggu Project Manager</option>
+                <option value="approved">Disetujui</option>
+                <option value="rejected">Ditolak</option>
+                <option value="cancelled">Dibatalkan</option>
+              </select>
             </div>
+
+            {/* Button Reset Filter */}
+            <div className="col-md-2 d-flex align-items-end">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => {
+                  setSelectedProject("");
+                  setSelectedStatus("");
+                }}
+              >
+                Reset Filter
+              </button>
+            </div>
+
           </div>
         </div>
       </div>
 
-      {/* Tabel Data HIRA */}
+      {/* Error Alert */}
+      {errorMessage && (
+        <div className="alert alert-danger mb-4" role="alert">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Table Data HIRA */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0" style={{ fontSize: "14px" }}>
-              <thead className="table-light">
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-light border-bottom">
+              <tr>
+                <th className="py-3 px-3">No. Dokumen</th>
+                <th className="py-3 px-3">Paket & Area Pekerjaan</th>
+                <th className="py-3 px-3">Proyek</th>
+                <th className="py-3 px-3">Dibuat Oleh</th>
+                <th className="py-3 px-3 text-center">Status</th>
+                <th className="py-3 px-3 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
                 <tr>
-                  <th style={{ width: "50px" }} className="text-center">#</th>
-                  <th>Judul Kegiatan / Pekerjaan</th>
-                  <th>Lokasi / Area</th>
-                  <th>Subkontraktor / Dept</th>
-                  <th>Penilai (Assessor)</th>
-                  <th>Tanggal</th>
-                  <th className="text-center">Potensi Risiko Tinggi</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-end" style={{ minWidth: "100px" }}>Aksi</th>
+                  <td colSpan={6} className="text-center py-5">
+                    <div className="spinner-border text-success mb-2" role="status"></div>
+                    <p className="text-muted small mb-0">
+                      Memuat data HIRA dari server...
+                    </p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-5 text-muted">
-                      Memuat data HIRA...
+              ) : documents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-5 text-muted">
+                    Tidak ada dokumen HIRA ditemukan.
+                  </td>
+                </tr>
+              ) : (
+                documents.map((doc) => (
+                  <tr key={doc.id}>
+                    <td className="px-3 fw-semibold text-secondary">
+                      {doc.document_number || <span className="text-muted fst-italic">Belum Diatur</span>}
+                    </td>
+                    <td className="px-3">
+                      <div className="fw-bold text-dark">{doc.work_package}</div>
+                      <small className="text-muted d-block">
+                        Area: {doc.work_area || "-"}
+                      </small>
+                      <small className="text-muted">
+                        Rev Round: #{doc.submission_round}
+                      </small>
+                    </td>
+                    <td className="px-3">{doc.project_name}</td>
+                    <td className="px-3">
+                      <div>{doc.created_by.full_name}</div>
+                      <small className="text-muted text-capitalize">({doc.created_by.role})</small>
+                    </td>
+                    <td className="px-3 text-center">
+                      {renderStatusBadge(doc.status)}
+                    </td>
+                    <td className="px-3 text-center">
+                      <Link
+                        to={`/hira/${doc.id}`}
+                        className="btn btn-sm btn-outline-primary fw-semibold"
+                      >
+                        Detail &rarr;
+                      </Link>
                     </td>
                   </tr>
-                ) : filteredList.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-5 text-muted">
-                      Tidak ada dokumen HIRA yang ditemukan.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredList.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="text-center fw-semibold text-muted">{index + 1}</td>
-                      <td className="fw-semibold text-dark">{item.title}</td>
-                      <td>{item.location}</td>
-                      <td>{item.department || "-"}</td>
-                      <td>{item.assessor}</td>
-                      <td>{item.assessmentDate}</td>
-                      <td className="text-center">
-                        {item.highRiskCount > 0 ? (
-                          <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">
-                            {item.highRiskCount} Hazard Tinggi
-                          </span>
-                        ) : (
-                          <span className="badge bg-light text-muted border">Rendah / Sedang</span>
-                        )}
-                      </td>
-                      <td className="text-center">{getStatusBadge(item.status)}</td>
-                      <td className="text-end">
-                        <button
-                          className="btn btn-sm btn-outline-primary me-1"
-                          onClick={() => navigate(`/hira/${item.id}`)}
-                          title="Lihat Detail"
-                        >
-                          Detail
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

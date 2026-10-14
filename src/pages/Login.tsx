@@ -1,8 +1,14 @@
 // src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { useAuth } from "../hooks/useAuth";
-import api from "../services/api";
+
+// 🟢 Impor loginApi dari services/authService menggantikan panggilan api direct
+import { login } from "../services/authService";
+
+// 🟢 Impor tipe AuthUser dan Role dari types/auth
+import type { AuthUser, Role } from "../types/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -28,44 +34,49 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
-      // 🟢 Panggil endpoint /users/login/ sesuai skema cURL backend Django
-      const response = await api.post("/users/login/", {
+      // 🟢 Memanggil fungsi loginApi dari authService.ts
+      const data = await login({
         email,
         password,
       });
 
-      const data = response.data;
-
-      // Extract Token JWT (access / accessToken) dan data user
-      const token = data.access || data.access_token || data.token;
-      const userData = data.user || {
-        email: data.email || email,
-        role: data.role,
-        full_name: data.full_name || email,
-      };
+      const token = data.access;
 
       if (!token) {
         throw new Error("Token autentikasi tidak ditemukan pada respon server.");
       }
 
-      // Simpan ke AuthContext & localStorage
+      // 🟢 Tentukan userData dengan menyertakan id dan casting 'as Role'
+      const userData: AuthUser = data.user || {
+        id: 0,
+        email: email,
+        full_name: email,
+        role: "subcontractor" as Role,
+      };
+
+
+      // 🟢 Sekarang auth.login dapat dipanggil tanpa error TypeScript
       auth.login(token, userData);
 
       navigate("/home");
-    } catch (err: any) {
-      if (err.response) {
-        // Jika server merespons dengan status error (400, 401, 404, 500)
-        const serverError =
-          err.response.data?.detail ||
-          err.response.data?.message ||
-          err.response.data?.error ||
-          "Gagal masuk. Periksa email & password Anda.";
-        setErrorMessage(serverError);
-      } else if (err.request) {
-        // Jika request terkirim tapi tidak ada respons sama sekali
-        setErrorMessage("Gagal terhubung ke server backend Render. Coba beberapa saat lagi.");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        if (err.response) {
+          const serverError =
+            err.response.data?.detail ||
+            err.response.data?.message ||
+            err.response.data?.error ||
+            "Gagal masuk. Periksa email & password Anda.";
+          setErrorMessage(serverError);
+        } else if (err.request) {
+          setErrorMessage("Gagal terhubung ke server backend Render. Coba beberapa saat lagi.");
+        } else {
+          setErrorMessage("Terjadi kesalahan jaringan.");
+        }
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
       } else {
-        setErrorMessage(err.message || "Terjadi kesalahan sistem.");
+        setErrorMessage("Terjadi kesalahan sistem.");
       }
     } finally {
       setIsSubmitting(false);
@@ -132,7 +143,7 @@ export default function Login() {
                       name="email"
                       type="email"
                       className="form-control form-control-lg fs-6 bg-light border-1"
-                      placeholder="coordinator@hse.com"
+                      placeholder="Subcontractor@mail.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="email"
