@@ -6,7 +6,10 @@ export type AuditAction =
   | "submitted"
   | "approved"
   | "rejected"
-  | "cancelled";
+  | "cancelled"
+  | "request_closed"  // Tambahan untuk pengajuan tutup
+  | "closed"          // Tambahan untuk tutup resmi
+  | "number_set";     // Tambahan untuk penetapan no. dokumen
 
 export interface AuditEntry {
   id: string | number;

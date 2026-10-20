@@ -1,582 +1,676 @@
 // src/pages/workPermit/WorkPermitHeightForm.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
 import api from "../../services/api";
-import type { WorkPermitHeight } from "../../types/WorkPermitHeight";
-import type { YesNo } from "../../types/common";
+import { 
+  createWorkPermit, 
+  updateWorkPermit, 
+  getWorkPermitById, 
+  getWorkPermitFormSchema, 
+  submitWorkPermit 
+} from "../../services/workPermitServices";
+import type { HeightChecklist, WorkPermitPayload } from "../../types/workPermit";
+
+interface ProjectOption {
+  id: number;
+  name: string;
+}
+
+interface HiraActivity {
+  id: number;
+  activity_name: string;
+  initial_category: string;
+}
+
+interface HiraGroup {
+  id: number;
+  location_function: string;
+  activities: HiraActivity[];
+}
+
+interface HiraDocumentOption {
+  id: number;
+  document_number?: string;
+  title?: string;
+  project: number;
+  project_name: string;
+  status: string;
+  groups?: HiraGroup[];
+}
 
 export default function WorkPermitHeightForm() {
-  const [form, setForm] = useState<WorkPermitHeight>({
-    project: "",
-    date: "",
-    location: "",
-    description: "",
-    contractor: "",
-    equipment: "",
-    timeFrom: "",
-    timeTo: "",
-    responsible: "",
-    workersCount: "",
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = Boolean(id);
 
-    areaA: false,
-    areaB: false,
-    areaC: true,
+  // Form Field States
+  const [projectId, setProjectId] = useState<number | "">("");
+  const [hiraActivityId, setHiraActivityId] = useState<number | "">("");
+  const [workDate, setWorkDate] = useState<string>("");
+  const [workStart, setWorkStart] = useState<string>("08:00");
+  const [workEnd, setWorkEnd] = useState<string>("16:00");
+  const [workLocation, setWorkLocation] = useState<string>("");
+  const [gpsLocation, setGpsLocation] = useState<string>(""); // Tambahan GPS Location
+  const [photo, setPhoto] = useState<File | null>(null);       // Tambahan File Foto
+  const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+  
+  const [workDescription, setWorkDescription] = useState<string>("");
+  const [equipmentUsed, setEquipmentUsed] = useState<string>("");
+  const [personInCharge, setPersonInCharge] = useState<string>("");
+  const [workerCount, setWorkerCount] = useState<number>(1);
+  const [safetyAreas, setSafetyAreas] = useState<string[]>([]);
+  const [selectedPpe, setSelectedPpe] = useState<string[]>([]);
+  const [ppeOther, setPpeOther] = useState<string[]>([]);
+  const [ppeOtherInput, setPpeOtherInput] = useState<string>("");
 
-    chkSpkSigned: "",
-    chkResponsibleAssigned: "",
-    chkWeatherGood: "",
-    chkPpePrepared: "",
-    chkSafetyInduction: "",
-    chkExperienced: "",
-    chkNoBalanceIssue: "",
-    chkEmergencyProcedureUnderstood: "",
-    chkSignsInstalled: "",
-    chkSafetyLineNetDeckInstalled: "",
-    chkClimbingInstalled: "",
-    chkAreaBelowClear: "",
-    chkEquipmentInspected: "",
-    chkChemicalB3Controlled: "",
-
-    apdGloves: false,
-    apdSafetyBelt: false,
-    apdBodyHarness: false,
-    apdShoes: false,
-    apdOthers: "",
-
-    notes: "",
+  // 14 Checklist Keselamatan Default
+  const [checklist, setChecklist] = useState<HeightChecklist>({
+    "1": false, "2": false, "3": false, "4": false, "5": false,
+    "6": false, "7": false, "8": false, "9": false, "10": false,
+    "11": false, "12": false, "13": false, "14": false,
   });
 
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Dropdown Options from Backend
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [availableHiraDocs, setAvailableHiraDocs] = useState<HiraDocumentOption[]>([]);
+  const [availableSafetyAreas, setAvailableSafetyAreas] = useState<{ code: string; name: string }[]>([]);
+  const [availablePpeOptions, setAvailablePpeOptions] = useState<{ key: string; name: string }[]>([]);
 
-  const handleChange =
-    (field: keyof WorkPermitHeight) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const target = e.target as HTMLInputElement;
-      const value =
-        target.type === "checkbox" ? target.checked : target.value;
+  // UI States
+  const [loading, setLoading] = useState<boolean>(false);
+  const [fetchingData, setFetchingData] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-      setForm((prev) => ({
-        ...prev,
-        [field]: value as any,
-      }));
+  // Deskripsi 14 Checklist
+  const checklistDescriptions: Record<string, string> = {
+    "1": "SPK/kontrak ditandatangani",
+    "2": "Penanggung jawab ditentukan",
+    "3": "Cuaca cerah & tidak mendung",
+    "4": "Pekerja memakai & menyiapkan APD sesuai",
+    "5": "Sudah mendapat pengarahan K3 (Safety Induction)",
+    "6": "Punya pengalaman & kompeten",
+    "7": "Tidak punya penyakit ayan, rabun senja, gangguan keseimbangan",
+    "8": "Prosedur keadaan darurat dimengerti",
+    "9": "Rambu-rambu dipasang",
+    "10": "Safety line / safety net / safety deck terpasang",
+    "11": "Climbing terpasang (pekerjaan corewall)",
+    "12": "Area kerja & bawahnya bersih & bebas lalu lintas orang",
+    "13": "Peralatan diinspeksi & layak pakai",
+    "14": "Bahan kimia B3 aman, ada MSDS & label jelas",
+  };
+
+  // Handler Ambil Lokasi GPS Otomatis
+  const handleGetGps = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation tidak didukung oleh browser Anda.");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        setGpsLocation(`${lat}, ${lng}`);
+        setGpsLoading(false);
+      },
+      () => {
+        alert("Gagal mendeteksi lokasi GPS. Pastikan izin lokasi diaktifkan.");
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Fetch Form Schema & Projects on Mount
+  useEffect(() => {
+    const initForm = async () => {
+      setFetchingData(true);
+      try {
+        const schemaRes = await getWorkPermitFormSchema("working_at_height");
+        const schemaData = schemaRes?.data || schemaRes;
+
+        if (schemaData?.safety_areas) {
+          const areasArray = Object.entries(schemaData.safety_areas).map(([code, name]) => ({
+            code,
+            name: name as string,
+          }));
+          setAvailableSafetyAreas(areasArray);
+        } else {
+          setAvailableSafetyAreas([
+            { code: "A", name: "Area Perifer (Pinggiran)" },
+            { code: "B", name: "Area Pit Lift/ Tangga" },
+            { code: "C", name: "Pekerjaan perbaikan/ perawatan di ketinggian" }
+          ]);
+        }
+
+        if (schemaData?.ppe) {
+          const ppeArray = Object.entries(schemaData.ppe).map(([key, name]) => ({
+            key,
+            name: name as string,
+          }));
+          setAvailablePpeOptions(ppeArray);
+        } else {
+          setAvailablePpeOptions([
+            { key: "sarung_tangan", name: "Sarung tangan" },
+            { key: "safety_belt", name: "Safety Belt" },
+            { key: "body_harness", name: "Body Harness" },
+            { key: "sepatu", name: "Sepatu" }
+          ]);
+        }
+
+        const projRes = await api.get("/projects/");
+        setProjects(Array.isArray(projRes.data) ? projRes.data : projRes.data?.results || []);
+
+        if (isEditMode && id) {
+          const detail = await getWorkPermitById(id);
+          setProjectId(detail.project);
+          setHiraActivityId(detail.hira_activity);
+          setWorkDate(detail.work_date);
+          setWorkStart(detail.work_start);
+          setWorkEnd(detail.work_end);
+          setWorkLocation(detail.work_location);
+          setGpsLocation(detail.gps_location || ""); // Muat GPS
+          setWorkDescription(detail.work_description);
+          setEquipmentUsed(detail.equipment_used || "");
+          setPersonInCharge(detail.person_in_charge);
+          setWorkerCount(detail.worker_count);
+          setSafetyAreas(detail.safety_areas || []);
+          setSelectedPpe(detail.ppe || []);
+          setPpeOther(detail.ppe_other || []);
+          if (detail.checklist) {
+            setChecklist(detail.checklist as HeightChecklist);
+          }
+          if (detail.project) {
+            fetchHiraDocuments(detail.project);
+          }
+        }
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          setErrorMessage(err.response?.data?.detail || "Gagal memuat data form.");
+        } else {
+          setErrorMessage("Terjadi kesalahan saat memuat form.");
+        }
+      } finally {
+        setFetchingData(false);
+      }
     };
 
-  const handleYesNo =
-    (field: keyof WorkPermitHeight, value: YesNo) => () => {
-      setForm((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    };
+    initForm();
+  }, [isEditMode, id]);
 
-  const yesNoRow = (
-    field: keyof WorkPermitHeight,
-    label: string,
-    no: number
-  ) => (
-    <tr key={no}>
-      <td style={{ width: 40 }}>{no}.</td>
-      <td>{label}</td>
-      <td className="text-center" style={{ width: 60 }}>
-        <input
-          type="radio"
-          className="form-check-input"
-          name={String(field)}
-          checked={form[field] === "yes"}
-          onChange={handleYesNo(field, "yes")}
-        />
-      </td>
-      <td className="text-center" style={{ width: 60 }}>
-        <input
-          type="radio"
-          className="form-check-input"
-          name={String(field)}
-          checked={form[field] === "no"}
-          onChange={handleYesNo(field, "no")}
-        />
-      </td>
-    </tr>
-  );
+  const fetchHiraDocuments = async (projId: number | string) => {
+    try {
+      const res = await api.get(`/hira/documents/`, {
+        params: { project: projId, status: "approved" }
+      });
+      const listData = Array.isArray(res.data) ? res.data : res.data?.results || [];
+      
+      const detailedDocs = await Promise.all(
+        listData.map(async (doc: { id: number }) => {
+          try {
+            const detailRes = await api.get(`/hira/documents/${doc.id}/`);
+            return detailRes.data;
+          } catch {
+            return doc;
+          }
+        })
+      );
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setPhotos(Array.from(e.target.files));
+      setAvailableHiraDocs(detailedDocs);
+    } catch (err) {
+      console.error("Gagal memuat HIRA:", err);
+      setAvailableHiraDocs([]);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleProjectChange = (selectedProjId: string) => {
+    const numId = selectedProjId ? Number(selectedProjId) : "";
+    setProjectId(numId);
+    setHiraActivityId("");
+    setAvailableHiraDocs([]);
+
+    if (numId) {
+      fetchHiraDocuments(numId);
+    }
+  };
+
+  const handleChecklistToggle = (key: string) => {
+    setChecklist((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleSafetyAreaToggle = (code: string) => {
+    setSafetyAreas((prev) =>
+      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code]
+    );
+  };
+
+  const handlePpeToggle = (key: string) => {
+    setSelectedPpe((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  };
+
+  const handleAddPpeOther = () => {
+    if (ppeOtherInput.trim() && ppeOther.length < 2) {
+      setPpeOther([...ppeOther, ppeOtherInput.trim()]);
+      setPpeOtherInput("");
+    }
+  };
+
+  const handleSubmit = async (shouldSubmit: boolean = false) => {
+    setLoading(true);
+    setErrorMessage("");
+
+    if (!projectId || !hiraActivityId || !workDate || !workLocation || !workDescription || !personInCharge) {
+      setErrorMessage("Mohon lengkapi semua field wajib yang bertanda bintang (*).");
+      setLoading(false);
+      return;
+    }
+
+    const payload: WorkPermitPayload = {
+      project: Number(projectId),
+      hira_activity: Number(hiraActivityId),
+      permit_type: "working_at_height",
+      work_date: workDate,
+      work_start: workStart,
+      work_end: workEnd,
+      work_location: workLocation,
+      gps_location: gpsLocation,
+      photo: photo,
+      work_description: workDescription,
+      equipment_used: equipmentUsed,
+      person_in_charge: personInCharge,
+      worker_count: Number(workerCount),
+      safety_areas: safetyAreas,
+      checklist,
+      ppe: selectedPpe,
+      ppe_other: ppeOther,
+    };
 
     try {
-      // TODO: jika nanti ingin upload foto ke backend,
-      // ubah ke FormData seperti di form confined space.
-      await api.post("/work-permit/height/", form);
-      alert("Form Izin Kerja di Ketinggian berhasil disimpan.");
-    } catch (err) {
-      console.error(err);
-      alert("Gagal menyimpan form. Coba lagi nanti.");
+      let savedPermit;
+      if (isEditMode && id) {
+        savedPermit = await updateWorkPermit(id, payload);
+      } else {
+        savedPermit = await createWorkPermit(payload);
+      }
+
+      if (shouldSubmit) {
+        await submitWorkPermit(savedPermit.id);
+      }
+
+      navigate(`/work-permit/${savedPermit.id}`);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const errorData = err.response?.data;
+        if (typeof errorData === "object" && errorData !== null) {
+          const firstKey = Object.keys(errorData)[0];
+          const errorMsg = Array.isArray(errorData[firstKey]) ? errorData[firstKey][0] : errorData[firstKey];
+          setErrorMessage(`Gagal menyimpan: [${firstKey}] ${errorMsg}`);
+        } else {
+          setErrorMessage("Gagal menyimpan izin kerja.");
+        }
+      } else {
+        setErrorMessage("Terjadi kesalahan yang tidak diketahui.");
+      }
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
+  if (fetchingData) {
+    return (
+      <div className="container py-5 text-center">
+        <div className="spinner-border text-primary" role="status"></div>
+        <p className="text-muted mt-2">Memuat data formulir...</p>
+      </div>
+    );
+  }
+
   return (
-  <>
-    <h1 className="h4 mb-2 d-flex align-items-center gap-2">
-      Form Izin Kerja di Ketinggian
-      <span className="badge bg-warning text-dark">
-        Risiko jatuh dari ketinggian
-      </span>
-    </h1>
-    <p className="text-muted mb-4" style={{ fontSize: 14 }}>
-      Digunakan untuk pekerjaan di area tepi lantai, perifer, pit lift/tangga,
-      corewall, dan area lain yang memiliki potensi jatuh dari ketinggian.
-      Form ini memastikan pengamanan area, kelayakan peralatan kerja di
-      ketinggian, dan kelengkapan APD sebelum pekerjaan dimulai.
-    </p>
+    <div className="container py-4" style={{ maxWidth: "900px" }}>
+      
+      {/* Error Alert */}
+      {errorMessage && <div className="alert alert-danger shadow-sm">{errorMessage}</div>}
 
-      <form onSubmit={handleSubmit}>
-        <div className="row">
-          {/* KIRI: form utama */}
-          <div className="col-lg-8">
-            <div className="card shadow-sm border-0 mb-4">
-              <div className="card-header bg-white border-0">
-                <h2 className="h6 mb-0">Informasi Pekerjaan</h2>
-              </div>
-              <div className="card-body">
-                {/* Informasi pekerjaan */}
-                <div className="row">
-                  <div className="col-md-8 mb-3">
-                    <label className="form-label">Proyek</label>
-                    <input
-                      className="form-control"
-                      value={form.project}
-                      onChange={handleChange("project")}
-                    />
-                  </div>
-                  <div className="col-md-4 mb-3">
-                    <label className="form-label">Tanggal</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={form.date}
-                      onChange={handleChange("date")}
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label">Lokasi pekerjaan</label>
-                  <input
-                    className="form-control"
-                    value={form.location}
-                    onChange={handleChange("location")}
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label">Deskripsi pekerjaan</label>
-                  <textarea
-                    className="form-control"
-                    rows={3}
-                    value={form.description}
-                    onChange={handleChange("description")}
-                  />
-                </div>
-
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Pekerjaan oleh</label>
-                    <input
-                      className="form-control"
-                      value={form.contractor}
-                      onChange={handleChange("contractor")}
-                      placeholder="Internal / Subkontraktor"
-                    />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Peralatan yang digunakan</label>
-                    <input
-                      className="form-control"
-                      value={form.equipment}
-                      onChange={handleChange("equipment")}
-                      placeholder="Scaffolding, gondola, tangga, dll."
-                    />
-                  </div>
-                </div>
-
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Waktu pekerjaan</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="time"
-                        className="form-control"
-                        value={form.timeFrom}
-                        onChange={handleChange("timeFrom")}
-                      />
-                      <span className="align-self-center">s/d</span>
-                      <input
-                        type="time"
-                        className="form-control"
-                        value={form.timeTo}
-                        onChange={handleChange("timeTo")}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Penanggung jawab</label>
-                    <input
-                      className="form-control"
-                      value={form.responsible}
-                      onChange={handleChange("responsible")}
-                    />
-                  </div>
-                </div>
-
-                <div className="row">
-                  <div className="col-md-4 mb-3">
-                    <label className="form-label">Jumlah tenaga kerja</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="form-control"
-                      value={form.workersCount}
-                      onChange={handleChange("workersCount")}
-                    />
-                  </div>
-                  <div className="col-md-8 mb-3">
-                    <label className="form-label d-block">
-                      Checklist area pekerjaan
-                    </label>
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="areaA"
-                        checked={form.areaA}
-                        onChange={handleChange("areaA")}
-                      />
-                      <label className="form-check-label" htmlFor="areaA">
-                        (A) Area Perifer (Pinggiran)
-                      </label>
-                    </div>
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="areaB"
-                        checked={form.areaB}
-                        onChange={handleChange("areaB")}
-                      />
-                      <label className="form-check-label" htmlFor="areaB">
-                        (B) Area Pit Lift / Tangga
-                      </label>
-                    </div>
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="areaC"
-                        checked={form.areaC}
-                        onChange={handleChange("areaC")}
-                      />
-                      <label className="form-check-label" htmlFor="areaC">
-                        (C) Pekerjaan perbaikan / perawatan di ketinggian
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Checklist keselamatan 14 poin */}
-                <div className="mt-3 mb-2">
-                  <h2 className="h6">
-                    Sebelum pekerjaan disetujui, semua checklist di bawah ini
-                    harus diisi.
-                  </h2>
-                  <hr className="mt-1" />
-                </div>
-
-                <div className="table-responsive mb-3">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 40 }}>No</th>
-                        <th>Uraian</th>
-                        <th className="text-center" style={{ width: 60 }}>
-                          YA
-                        </th>
-                        <th className="text-center" style={{ width: 60 }}>
-                          TIDAK
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {yesNoRow(
-                        "chkSpkSigned",
-                        "Apakah Surat Perintah Kerja (SPK) atau kontrak pekerjaan ini sudah ditandatangani?",
-                        1
-                      )}
-                      {yesNoRow(
-                        "chkResponsibleAssigned",
-                        "Apakah penanggung jawab pekerjaan sudah ditentukan?",
-                        2
-                      )}
-                      {yesNoRow(
-                        "chkWeatherGood",
-                        "Apakah cuaca cerah dan tidak mendung?",
-                        3
-                      )}
-                      {yesNoRow(
-                        "chkPpePrepared",
-                        "Apakah pekerja sudah memakai dan mempersiapkan APD yang sesuai?",
-                        4
-                      )}
-                      {yesNoRow(
-                        "chkSafetyInduction",
-                        "Apakah pekerja sudah mendapatkan pengarahan K3 (Safety Induction)?",
-                        5
-                      )}
-                      {yesNoRow(
-                        "chkExperienced",
-                        "Apakah pekerja mempunyai pengalaman dan kompeten melakukan pekerjaan ini?",
-                        6
-                      )}
-                      {yesNoRow(
-                        "chkNoBalanceIssue",
-                        "Apakah pekerja tidak menderita penyakit ayan, rabun senja, atau gangguan keseimbangan?",
-                        7
-                      )}
-                      {yesNoRow(
-                        "chkEmergencyProcedureUnderstood",
-                        "Apakah prosedur keadaan darurat sudah dimengerti?",
-                        8
-                      )}
-                      {yesNoRow(
-                        "chkSignsInstalled",
-                        "Apakah rambu-rambu yang diperlukan sudah terpasang?",
-                        9
-                      )}
-                      {yesNoRow(
-                        "chkSafetyLineNetDeckInstalled",
-                        "Apakah safety line, safety net, dan safety deck sudah terpasang?",
-                        10
-                      )}
-                      {yesNoRow(
-                        "chkClimbingInstalled",
-                        "Apakah climbing sudah terpasang? (untuk pekerjaan corewall)",
-                        11
-                      )}
-                      {yesNoRow(
-                        "chkAreaBelowClear",
-                        "Apakah area pekerjaan sudah dibersihkan dan area di bawahnya bebas dari area kerja dan lalu lintas orang?",
-                        12
-                      )}
-                      {yesNoRow(
-                        "chkEquipmentInspected",
-                        "Apakah peralatan sudah diinspeksi dan layak pakai?",
-                        13
-                      )}
-                      {yesNoRow(
-                        "chkChemicalB3Controlled",
-                        "Apakah bahan kimia B3 kemasannya memadai (bebas potensi bocor), sudah dilengkapi Material Safety Data Sheet (MSDS) dan diberi label yang jelas? (jika menggunakan bahan kimia B3)",
-                        14
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* APD */}
-                <div className="mt-3 mb-2">
-                  <h2 className="h6">Alat Pelindung Diri (APD)</h2>
-                  <hr className="mt-1" />
-                </div>
-
-                <div className="row mb-3">
-                  <div className="col-md-6">
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="apdGloves"
-                        checked={form.apdGloves}
-                        onChange={handleChange("apdGloves")}
-                      />
-                      <label className="form-check-label" htmlFor="apdGloves">
-                        Sarung tangan
-                      </label>
-                    </div>
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="apdSafetyBelt"
-                        checked={form.apdSafetyBelt}
-                        onChange={handleChange("apdSafetyBelt")}
-                      />
-                      <label
-                        className="form-check-label"
-                        htmlFor="apdSafetyBelt"
-                      >
-                        Safety Belt
-                      </label>
-                    </div>
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="apdBodyHarness"
-                        checked={form.apdBodyHarness}
-                        onChange={handleChange("apdBodyHarness")}
-                      />
-                      <label
-                        className="form-check-label"
-                        htmlFor="apdBodyHarness"
-                      >
-                        Body Harness
-                      </label>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="apdShoes"
-                        checked={form.apdShoes}
-                        onChange={handleChange("apdShoes")}
-                      />
-                      <label className="form-check-label" htmlFor="apdShoes">
-                        Sepatu
-                      </label>
-                    </div>
-                    <div className="mt-2">
-                      <input
-                        className="form-control"
-                        placeholder="APD lain (misalnya kacamata safety, rompi, dsb.)"
-                        value={form.apdOthers}
-                        onChange={handleChange("apdOthers")}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Catatan + Foto */}
-                <div className="mb-3">
-                  <label className="form-label">Catatan tambahan</label>
-                  <textarea
-                    className="form-control"
-                    rows={3}
-                    value={form.notes}
-                    onChange={handleChange("notes")}
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="form-label">
-                    Upload Foto Bukti (area, rambu, APD, peralatan)
-                  </label>
-                  <input
-                    type="file"
-                    className="form-control"
-                    accept="image/*"
-                    multiple
-                    onChange={handlePhotoChange}
-                  />
-                  {photos.length > 0 && (
-                    <small className="text-muted d-block mt-1">
-                      {photos.length} file dipilih:{" "}
-                      {photos.map((f) => f.name).join(", ")}
-                    </small>
-                  )}
-                </div>
-
-                <div className="d-flex justify-content-end">
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Menyimpan..." : "Simpan Form Izin Kerja di Ketinggian"}
-                  </button>
-                </div>
-              </div>
-            </div>
+      <div className="card shadow border-0 overflow-hidden">
+        
+        {/* Header Berwarna */}
+        <div className="bg-primary text-white p-4 d-flex justify-content-between align-items-center">
+          <div>
+            <span className="badge bg-light text-primary fw-bold mb-2">MODUL K3 BERISIKO TINGGI</span>
+            <h2 className="fw-bold mb-1 text-white">
+              {isEditMode ? "Edit Izin Kerja di Ketinggian" : "Formulir Izin Kerja di Ketinggian"}
+            </h2>
+            <p className="mb-0 text-white-50 small">Isi detail pekerjaan dan checklist keselamatan dengan teliti dan benar.</p>
           </div>
-
-          {/* KANAN: alur & catatan dalam kotak berwarna */}
-          <div className="col-lg-4">
-            {/* Kotak hijau – alur singkat */}
-            <div className="card shadow-sm border-success mb-3">
-              <div className="card-header bg-success text-white py-2">
-                <h2 className="h6 mb-0">
-                  Alur singkat izin kerja di ketinggian
-                </h2>
-              </div>
-              <div className="card-body bg-light">
-                <ol className="mb-0" style={{ fontSize: 14 }}>
-                  <li>
-                    Foreman mengisi form izin kerja di ketinggian dan checklist
-                    keselamatan, serta melampirkan JSA / gambar kerja bila
-                    diperlukan.
-                  </li>
-                  <li>
-                    SHE Officer memeriksa kelengkapan form, kondisi area kerja,
-                    APD, dan sarana pengaman (scaffolding, safety line, safety
-                    net, dll.).
-                  </li>
-                  <li>
-                    Site Manager / Project Manager memberikan persetujuan
-                    (approve) sebelum pekerjaan di ketinggian dilaksanakan.
-                  </li>
-                  <li>
-                    Pekerjaan dilaksanakan sesuai ketentuan di dalam izin dengan
-                    pengawasan oleh personel yang kompeten.
-                  </li>
-                  <li>
-                    Setelah pekerjaan selesai dan area dinyatakan aman, SHE
-                    Officer melakukan evaluasi dan Foreman menutup izin pada
-                    daftar izin kerja.
-                  </li>
-                </ol>
-              </div>
-            </div>
-
-            {/* Kotak kuning – catatan penting */}
-            <div className="card shadow-sm border-warning">
-              <div className="card-header bg-warning text-dark py-2">
-                <h2 className="h6 mb-0">
-                  Catatan penting kerja di ketinggian
-                </h2>
-              </div>
-              <div className="card-body bg-light">
-                <ul className="mb-0" style={{ fontSize: 13, paddingLeft: 18 }}>
-                  <li>
-                    Pekerjaan pada ketinggian ≥ 2 m wajib menggunakan APD
-                    pencegah jatuh (safety belt / body harness) yang terpasang
-                    pada anchorage yang kuat.
-                  </li>
-                  <li>
-                    Scaffolding, tangga, gondola dan safety net harus diperiksa
-                    oleh personel yang kompeten sebelum digunakan dan diberi
-                    label layak pakai.
-                  </li>
-                  <li>
-                    Hindari bekerja saat cuaca buruk (hujan lebat, angin
-                    kencang, petir) dan pastikan area di bawah diberi
-                    pembatas serta rambu dilarang melintas.
-                  </li>
-                  <li>
-                    Selalu pastikan jalur evakuasi dan prosedur keadaan darurat
-                    sudah dipahami semua pekerja sebelum pekerjaan dimulai.
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <button className="btn btn-light btn-sm fw-semibold text-primary px-3 shadow-sm" onClick={() => navigate(-1)}>
+            &larr; Kembali
+          </button>
         </div>
-      </form>
-    </>
+
+        <div className="card-body p-4 p-md-5">
+          
+          {/* 1. Project & HIRA Selection */}
+          <div className="mb-4 p-3 bg-light rounded border-start border-primary border-4">
+            <h5 className="fw-bold text-dark mb-3">1. Referensi Proyek &amp; Aktivitas HIRA</h5>
+            
+            <div className="mb-3">
+              <label className="form-label fw-semibold small">Pilih Proyek*:</label>
+              <select
+                className="form-select"
+                value={projectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                disabled={isEditMode}
+              >
+                <option value="">-- Pilih Proyek --</option>
+                {projects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-2">
+              <label className="form-label fw-semibold small">Pilih Aktivitas HIRA (Disetujui)*:</label>
+              <select
+                className="form-select"
+                value={hiraActivityId}
+                onChange={(e) => setHiraActivityId(Number(e.target.value))}
+                disabled={isEditMode || !projectId}
+              >
+                <option value="">-- Pilih Aktivitas HIRA --</option>
+                {availableHiraDocs.map((doc) => 
+                  doc.groups?.map((group) => 
+                    group.activities?.map((act) => (
+                      <option key={act.id} value={act.id}>
+                        [Dok: {doc.document_number || doc.id}] [{group.location_function}] {act.activity_name} (Risiko: {act.initial_category})
+                      </option>
+                    ))
+                  )
+                )}
+              </select>
+              <small className="text-muted">
+                {!projectId ? "Silakan pilih proyek terlebih dahulu." : "Hanya menampilkan HIRA berstatus approved pada proyek ini."}
+              </small>
+            </div>
+          </div>
+
+          <hr className="my-4 text-muted" />
+
+          {/* 2. Detail Pekerjaan */}
+          <h5 className="fw-bold text-dark mb-3">2. Detail Waktu &amp; Lokasi Kerja</h5>
+          <div className="row g-3 mb-3">
+            <div className="col-md-4">
+              <label className="form-label fw-semibold small">Tanggal Kerja*:</label>
+              <input
+                type="date"
+                className="form-control"
+                value={workDate}
+                onChange={(e) => setWorkDate(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label fw-semibold small">Jam Mulai*:</label>
+              <input
+                type="time"
+                className="form-control"
+                value={workStart}
+                onChange={(e) => setWorkStart(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label fw-semibold small">Jam Selesai*:</label>
+              <input
+                type="time"
+                className="form-control"
+                value={workEnd}
+                onChange={(e) => setWorkEnd(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Lokasi Kerja (Area)*:</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Contoh: Lantai 3 Kolom C"
+                value={workLocation}
+                onChange={(e) => setWorkLocation(e.target.value)}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Koordinat GPS Lokasi:</label>
+              <div className="input-group">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Lat, Lng (Opsional)"
+                  value={gpsLocation}
+                  onChange={(e) => setGpsLocation(e.target.value)}
+                />
+                <button 
+                  type="button" 
+                  className="btn btn-outline-success d-flex align-items-center gap-1"
+                  onClick={handleGetGps}
+                  disabled={gpsLoading}
+                >
+                  {gpsLoading ? (
+                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                  ) : (
+                    <i className="bi bi-geo-alt-fill"></i>
+                  )}
+                  Ambil GPS
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Jumlah Pekerja (Orang)*:</label>
+              <input
+                type="number"
+                min={1}
+                className="form-control"
+                value={workerCount}
+                onChange={(e) => setWorkerCount(Number(e.target.value))}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Unggah Foto Lokasi / Kerja:</label>
+              <input
+                type="file"
+                className="form-control"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+              />
+              <small className="text-muted" style={{ fontSize: "11px" }}>Ambil langsung dari kamera atau pilih file galeri.</small>
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label fw-semibold small">Deskripsi Pekerjaan*:</label>
+            <textarea
+              className="form-control"
+              rows={3}
+              placeholder="Jelaskan detail pekerjaan yang akan dilakukan..."
+              value={workDescription}
+              onChange={(e) => setWorkDescription(e.target.value)}
+            ></textarea>
+          </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Penanggung Jawab (PIC)*:</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Nama penanggung jawab di lapangan"
+                value={personInCharge}
+                onChange={(e) => setPersonInCharge(e.target.value)}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Peralatan yang Digunakan:</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Contoh: Tangga, scaffolding"
+                value={equipmentUsed}
+                onChange={(e) => setEquipmentUsed(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <hr className="my-4 text-muted" />
+
+          {/* 3. Safety Areas */}
+          <h5 className="fw-bold text-dark mb-2">3. Area Keselamatan (Safety Areas)*</h5>
+          <p className="small text-muted mb-3">Pilih minimal satu area keselamatan yang relevan.</p>
+          <div className="d-flex flex-column gap-2 mb-4 p-3 bg-light rounded">
+            {Array.isArray(availableSafetyAreas) && availableSafetyAreas.map((area) => (
+              <div className="form-check" key={area.code}>
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id={`area-${area.code}`}
+                  checked={safetyAreas.includes(area.code)}
+                  onChange={() => handleSafetyAreaToggle(area.code)}
+                />
+                <label className="form-check-label" htmlFor={`area-${area.code}`}>
+                  <strong className="me-2">[{area.code}]</strong> {area.name}
+                </label>
+              </div>
+            ))}
+          </div>
+
+          <hr className="my-4 text-muted" />
+
+          {/* 4. 14 Checklist Keselamatan */}
+          <h5 className="fw-bold text-dark mb-2">4. Checklist Keselamatan Kerja di Ketinggian*</h5>
+          <p className="small text-muted mb-3">Semua item checklist wajib dijawab untuk melakukan *submit* izin kerja.</p>
+          <div className="table-responsive mb-4 shadow-sm rounded">
+            <table className="table table-bordered table-striped align-middle mb-0">
+              <thead className="table-primary text-dark">
+                <tr>
+                  <th style={{ width: "60px" }} className="text-center">No</th>
+                  <th>Poin Pemeriksaan Keselamatan</th>
+                  <th style={{ width: "130px" }} className="text-center">Status (Ya / Tidak)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(checklistDescriptions).map((key) => (
+                  <tr key={key}>
+                    <td className="text-center fw-bold">{key}</td>
+                    <td>{checklistDescriptions[key]}</td>
+                    <td className="text-center">
+                      <div className="form-check form-switch d-inline-block">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          checked={checklist[key] || false}
+                          onChange={() => handleChecklistToggle(key)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <hr className="my-4 text-muted" />
+
+          {/* 5. PPE / APD */}
+          <h5 className="fw-bold text-dark mb-2">5. Alat Pelindung Diri (APD / PPE)</h5>
+          <p className="small text-muted mb-3">Pilih APD yang wajib digunakan oleh para pekerja.</p>
+          <div className="d-flex flex-column gap-2 mb-3 p-3 bg-light rounded">
+            {Array.isArray(availablePpeOptions) && availablePpeOptions.map((ppe) => (
+              <div className="form-check" key={ppe.key}>
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id={`ppe-${ppe.key}`}
+                  checked={selectedPpe.includes(ppe.key)}
+                  onChange={() => handlePpeToggle(ppe.key)}
+                />
+                <label className="form-check-label" htmlFor={`ppe-${ppe.key}`}>
+                  {ppe.name}
+                </label>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-4">
+            <label className="form-label fw-semibold small">APD Lainnya (Maksimal 2 baris):</label>
+            <div className="input-group mb-2">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Nama APD tambahan..."
+                value={ppeOtherInput}
+                onChange={(e) => setPpeOtherInput(e.target.value)}
+                disabled={ppeOther.length >= 2}
+              />
+              <button
+                className="btn btn-outline-primary"
+                type="button"
+                onClick={handleAddPpeOther}
+                disabled={ppeOther.length >= 2 || !ppeOtherInput.trim()}
+              >
+                Tambah
+              </button>
+            </div>
+            {ppeOther.length > 0 && (
+              <ul className="list-group">
+                {ppeOther.map((item, idx) => (
+                  <li key={idx} className="list-group-item d-flex justify-content-between align-items-center py-1">
+                    <span>{item}</span>
+                    <button
+                      type="button"
+                      className="btn btn-sm text-danger"
+                      onClick={() => setPpeOther(ppeOther.filter((_, i) => i !== idx))}
+                    >
+                      &times; Hapus
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="d-flex justify-content-end gap-3 pt-4 border-top">
+            <button
+              type="button"
+              className="btn btn-secondary px-4 shadow-sm"
+              onClick={() => handleSubmit(false)}
+              disabled={loading}
+            >
+              Simpan sebagai Draft
+            </button>
+            <button
+              type="button"
+              className="btn btn-success px-4 shadow-sm"
+              onClick={() => handleSubmit(true)}
+              disabled={loading}
+            >
+              {loading ? "Menyimpan..." : "Simpan & Submit Izin Kerja"}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
   );
 }

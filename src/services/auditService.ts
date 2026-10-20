@@ -25,3 +25,17 @@ export const getHiraDocumentHistory = async (
     resource_id: String(documentId),
   });
 };
+
+/**
+ * Helper khusus untuk mengambil riwayat / audit trail dari 1 Work Permit tertentu
+ */
+export const getWorkPermitHistory = async (
+  permitId: string | number,
+  params?: Omit<AuditQueryParams, "resource_type" | "resource_id">
+): Promise<AuditResponse> => {
+  return getAuditLogs({
+    ...params,
+    resource_type: "work_permit.workpermit",
+    resource_id: String(permitId),
+  });
+};

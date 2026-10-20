@@ -78,17 +78,17 @@ export default function HiraForm() {
     if (isEditMode) {
       fetchHiraDetail();
     } else {
-      // Default 1 Group & 1 Activity untuk dokumen baru
+      // Default 1 Group & 1 Activity untuk dokumen baru (applicable_regulation di level grup)
       setGroups([
         {
           location_function: "",
+          applicable_regulation: "",
           activities: [
             {
               activity_name: "",
               activity_type: "NR",
               potential_hazard: "",
               risk_impact: "",
-              applicable_regulation: "",
               initial_severity: 1,
               initial_likelihood: 1,
               existing_controls: "",
@@ -109,13 +109,13 @@ export default function HiraForm() {
       ...groups,
       {
         location_function: "",
+        applicable_regulation: "",
         activities: [
           {
             activity_name: "",
             activity_type: "NR",
             potential_hazard: "",
             risk_impact: "",
-            applicable_regulation: "",
             initial_severity: 1,
             initial_likelihood: 1,
             existing_controls: "",
@@ -137,9 +137,9 @@ export default function HiraForm() {
     setGroups(groups.filter((_, index) => index !== gIndex));
   };
 
-  const handleGroupChange = (gIndex: number, value: string) => {
+  const handleGroupFieldChange = (gIndex: number, field: keyof HiraGroup, value: string) => {
     const updated = [...groups];
-    updated[gIndex].location_function = value;
+    updated[gIndex] = { ...updated[gIndex], [field]: value };
     setGroups(updated);
   };
 
@@ -151,7 +151,6 @@ export default function HiraForm() {
       activity_type: "NR",
       potential_hazard: "",
       risk_impact: "",
-      applicable_regulation: "",
       initial_severity: 1,
       initial_likelihood: 1,
       existing_controls: "",
@@ -208,7 +207,6 @@ export default function HiraForm() {
     setSubmitting(true);
     try {
       if (isEditMode && id) {
-        // Mode Edit: PATCH dokumen utama tanpa menyertakan array groups
         const updatePayload = {
           work_package: workPackage,
           work_area: workArea,
@@ -219,7 +217,6 @@ export default function HiraForm() {
         alert("Informasi dokumen HIRA berhasil diperbarui!");
         navigate(`/hira/${id}`);
       } else {
-        // Mode Buat Baru: POST dokumen secara nested lengkap dengan groups
         const createPayload: HiraFormPayload = {
           project: Number(projectId),
           work_package: workPackage,
@@ -287,7 +284,7 @@ export default function HiraForm() {
                   className="form-select"
                   value={projectId}
                   onChange={(e) => setProjectId(Number(e.target.value) || "")}
-                  disabled={isEditMode} // Proyek tidak boleh diubah saat edit
+                  disabled={isEditMode}
                   required
                 >
                   <option value="">-- Pilih Proyek --</option>
@@ -346,7 +343,7 @@ export default function HiraForm() {
               </div>
 
               {/* No. Dokumen (Read-Only) */}
-              <div className="col-md-4">
+              <div className="col-md-6">
                 <label className="form-label fw-semibold">No. Dokumen</label>
                 <input
                   type="text"
@@ -357,7 +354,7 @@ export default function HiraForm() {
               </div>
 
               {/* Tanggal Dokumen */}
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <label className="form-label fw-semibold">Tanggal Dokumen</label>
                 <input
                   type="date"
@@ -391,24 +388,36 @@ export default function HiraForm() {
               </button>
             </div>
             <div className="card-body">
-              <div className="mb-3">
-                <label className="form-label fw-semibold">
-                  Lokasi / Fungsi Pekerjaan <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Contoh: Alat Bekisting / Area Workshop"
-                  value={grp.location_function}
-                  onChange={(e) => handleGroupChange(gIdx, e.target.value)}
-                  required
-                />
+              <div className="row g-3 mb-3">
+                <div className="col-md-6">
+                  <label className="form-label fw-semibold">
+                    Lokasi / Fungsi Pekerjaan <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Contoh: Alat Bekisting / Area Workshop"
+                    value={grp.location_function}
+                    onChange={(e) => handleGroupFieldChange(gIdx, "location_function", e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-semibold">Regulasi yang Berlaku</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    placeholder="Contoh: - UU No.1 Tahun 1970&#10;- Permenaker No.9 Tahun 2016"
+                    value={grp.applicable_regulation || ""}
+                    onChange={(e) => handleGroupFieldChange(gIdx, "applicable_regulation", e.target.value)}
+                  />
+                  <small className="text-muted">Satu regulasi per baris, berlaku untuk seluruh aktivitas grup ini.</small>
+                </div>
               </div>
 
               <h6 className="fw-bold mt-4 mb-2 text-secondary">Daftar Aktivitas Pekerjaan:</h6>
 
               {grp.activities.map((act, aIdx) => {
-                // Live preview nilai Rt untuk form
                 const initialRisk = calculateRisk(act.initial_severity, act.initial_likelihood);
                 const residualRisk = calculateRisk(act.residual_severity, act.residual_likelihood);
 
@@ -426,7 +435,7 @@ export default function HiraForm() {
                     </div>
 
                     <div className="row g-2 mb-2">
-                      <div className="col-md-5">
+                      <div className="col-md-8">
                         <label className="form-label small fw-semibold">Nama Aktivitas *</label>
                         <input
                           type="text"
@@ -439,7 +448,7 @@ export default function HiraForm() {
                           required
                         />
                       </div>
-                      <div className="col-md-3">
+                      <div className="col-md-4">
                         <label className="form-label small fw-semibold">Sifat Pekerjaan *</label>
                         <select
                           className="form-select form-select-sm"
@@ -457,18 +466,6 @@ export default function HiraForm() {
                           <option value="NR">NR (Non-Rutin)</option>
                           <option value="E">E (Darurat)</option>
                         </select>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-semibold">Regulasi Berlaku</label>
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          placeholder="Contoh: UU No.1 Th 1970"
-                          value={act.applicable_regulation || ""}
-                          onChange={(e) =>
-                            handleActivityChange(gIdx, aIdx, "applicable_regulation", e.target.value)
-                          }
-                        />
                       </div>
                     </div>
 

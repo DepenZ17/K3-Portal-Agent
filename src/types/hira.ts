@@ -65,9 +65,11 @@ export interface HiraDocumentList {
 }
 
 // 3. Tipe Grup Lokasi / Fungsi (Hierarki Level 2 - Form & Detail)
+// applicable_regulation dipindah ke level grup sesuai spesifikasi backend terbaru
 export interface HiraGroup {
   id?: number;
   location_function: string;
+  applicable_regulation?: string; 
   order?: number;
   activities: HiraActivity[];
 }
@@ -79,7 +81,6 @@ export interface HiraActivity {
   activity_type?: "R" | "NR" | "E";
   potential_hazard: string;
   risk_impact: string;
-  applicable_regulation?: string;
   initial_severity: number;
   initial_likelihood: number;
   initial_risk_score?: number;
@@ -144,7 +145,7 @@ export interface HiraDetailResponse {
   has_unacceptable_residual: boolean;
   groups: HiraGroup[];
   approvals: HiraApproval[];
-  allowed_actions: AllowedAction[]; // Menggunakan array string dari backend
+  allowed_actions: AllowedAction[];
   created_at: string;
   updated_at: string;
 }

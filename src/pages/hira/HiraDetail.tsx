@@ -24,7 +24,6 @@ import type {
   HiraStatus, 
   HiraGroup, 
   HiraActivity, 
-  HiraApproval,
   AllowedAction,
   ActivityType
 } from "../../types/hira";
@@ -75,7 +74,6 @@ export default function HiraDetail() {
     try {
       const data = await getHiraDocumentById(id);
       setHira(data);
-      // Inisialisasi local state untuk edit per section
       setEditWorkPackage(data.work_package || "");
       setEditWorkArea(data.work_area || "");
       setEditDocumentDate(data.document_date || "");
@@ -95,11 +93,7 @@ export default function HiraDetail() {
     fetchHiraDetail();
   }, [fetchHiraDetail]);
 
-  // ==========================================
-  // HANDLERS GRANULAR SAVE (SAVE PER SECTION)
-  // ==========================================
-
-  // 1. Simpan Header Dokumen (PATCH /hira/documents/{id}/)
+  // Simpan Header Dokumen
   const handleSaveHeader = async () => {
     if (!id) return;
     setActionLoading(true);
@@ -120,7 +114,7 @@ export default function HiraDetail() {
     }
   };
 
-  // 2. Simpan Group (POST /hira/groups/ atau PATCH /hira/groups/{id}/)
+  // Simpan Group (Termasuk applicable_regulation di tingkat grup)
   const handleSaveGroup = async (group: HiraGroup, index: number) => {
     if (!id) return;
     setActionLoading(true);
@@ -128,17 +122,17 @@ export default function HiraDetail() {
     setSuccessMessage("");
     try {
       if (!group.id) {
-        // Buat Grup Baru jika belum memiliki ID
         await createHiraGroup({
           hira_document: Number(id),
           location_function: group.location_function,
+          applicable_regulation: group.applicable_regulation,
           order: index + 1,
         });
         setSuccessMessage("Grup lokasi baru berhasil ditambahkan!");
       } else {
-        // Update Grup yang Sudah Ada
         await updateHiraGroup(group.id, {
           location_function: group.location_function,
+          applicable_regulation: group.applicable_regulation,
           order: group.order ?? index + 1,
         });
         setSuccessMessage(`Grup "${group.location_function}" berhasil diperbarui!`);
@@ -151,7 +145,7 @@ export default function HiraDetail() {
     }
   };
 
-  // 3. Simpan Activity (POST /hira/activities/ atau PATCH /hira/activities/{id}/)
+  // Simpan Activity
   const handleSaveActivity = async (activity: HiraActivity, groupId?: number) => {
     if (!activity.activity_name.trim()) {
       alert("Nama aktivitas tidak boleh kosong.");
@@ -162,7 +156,6 @@ export default function HiraDetail() {
     setSuccessMessage("");
     try {
       if (!activity.id) {
-        // Buat Aktivitas Baru jika belum ada ID
         if (!groupId) {
           alert("Harap simpan grup lokasi terlebih dahulu sebelum menambah aktivitas!");
           setActionLoading(false);
@@ -174,7 +167,6 @@ export default function HiraDetail() {
         });
         setSuccessMessage("Aktivitas baru berhasil ditambahkan!");
       } else {
-        // Update Aktivitas Granular
         await updateHiraActivity(activity.id, activity);
         setSuccessMessage(`Aktivitas "${activity.activity_name}" berhasil diperbarui!`);
       }
@@ -186,10 +178,8 @@ export default function HiraDetail() {
     }
   };
 
-  // Handler Hapus Group Granular
   const handleDeleteGroup = async (gIndex: number, groupId?: number) => {
     if (!groupId) {
-      // Hapus baris lokal yang belum di-save ke backend
       setEditableGroups(editableGroups.filter((_, idx) => idx !== gIndex));
       return;
     }
@@ -206,10 +196,8 @@ export default function HiraDetail() {
     }
   };
 
-  // Handler Hapus Activity Granular
   const handleDeleteActivity = async (gIndex: number, aIndex: number, activityId?: number) => {
     if (!activityId) {
-      // Hapus baris lokal yang belum di-save ke backend
       const updated = [...editableGroups];
       updated[gIndex].activities = updated[gIndex].activities.filter((_, idx) => idx !== aIndex);
       setEditableGroups(updated);
@@ -228,10 +216,9 @@ export default function HiraDetail() {
     }
   };
 
-  // Helper Perubahan Input Lokal
-  const handleGroupTextChange = (gIndex: number, val: string) => {
+  const handleGroupTextChange = (gIndex: number, field: keyof HiraGroup, val: string) => {
     const updated = [...editableGroups];
-    updated[gIndex].location_function = val;
+    updated[gIndex] = { ...updated[gIndex], [field]: val };
     setEditableGroups(updated);
   };
 
@@ -254,6 +241,7 @@ export default function HiraDetail() {
       ...editableGroups,
       {
         location_function: "",
+        applicable_regulation: "",
         activities: [
           {
             activity_name: "",
@@ -284,10 +272,6 @@ export default function HiraDetail() {
     });
     setEditableGroups(updated);
   };
-
-  // ==========================================
-  // ACTION HANDLERS UMUM DOKUMEN
-  // ==========================================
 
   const handleSubmit = async () => {
     if (!id || !window.confirm("Apakah Anda yakin ingin mengajukan dokumen HIRA ini?")) return;
@@ -437,7 +421,6 @@ export default function HiraDetail() {
     );
   }
 
-  // Pengecekan Hak Akses
   const allowedActions = hira.allowed_actions;
   const isActionAllowed = (actionKey: AllowedAction): boolean => {
     if (Array.isArray(allowedActions)) {
@@ -456,7 +439,6 @@ export default function HiraDetail() {
   const canSetNumber = isActionAllowed("can_set_number");
   const canDeleteDraft = hira.status === "draft" && hira.submission_round === 0;
 
-  // Status apakah pengguna dapat mengedit isian form secara granular
   const isEditable = canEdit && (hira.status === "draft" || hira.status === "rejected");
 
   return (
@@ -469,7 +451,6 @@ export default function HiraDetail() {
         {renderStatusBadge(hira.status)}
       </div>
 
-      {/* Alert Notification */}
       {errorMessage && <div className="alert alert-danger mb-3">{errorMessage}</div>}
       {successMessage && <div className="alert alert-success mb-3">{successMessage}</div>}
 
@@ -478,12 +459,12 @@ export default function HiraDetail() {
         <div className="alert alert-warning border-warning d-flex align-items-center mb-4">
           <div className="me-3 fs-3">⚠️</div>
           <div>
-            <strong>Peringatan Risiko Sisa!</strong> Dokumen ini memiliki aktivitas dengan Skor Risiko Sisa (R_t &gt; 4). Dokumen tidak dapat disetujui (Approve) sampai pengendalian disesuaikan.
+            <strong>Peringatan Risiko Sisa!</strong> Dokumen ini memiliki aktivitas dengan Skor Risiko Sisa yang tidak dapat diterima. Dokumen tidak dapat disetujui sampai pengendalian disesuaikan[cite: 2].
           </div>
         </div>
       )}
 
-      {/* SECTION 1: HEADER DOKUMEN (FORM & SAVE HEADER) */}
+      {/* SECTION 1: HEADER DOKUMEN */}
       <div className="card shadow-sm border-0 mb-4">
         <div className="card-header bg-success text-white fw-bold d-flex justify-content-between align-items-center">
           <span>1. Informasi Umum Dokumen</span>
@@ -532,30 +513,32 @@ export default function HiraDetail() {
             </div>
           </div>
 
-          <div className="row g-3 bg-light p-3 rounded mt-2">
-            <div className="col-md-3">
-              <small className="text-muted d-block">Proyek</small>
-              <span className="fw-semibold">{hira.project_name}</span>
-            </div>
-            <div className="col-md-3">
-              <small className="text-muted d-block">No. Dokumen</small>
-              <span className="fw-semibold">{hira.document_number || "Belum Diatur"}</span>
-            </div>
-            <div className="col-md-3">
-              <small className="text-muted d-block">Dibuat Oleh</small>
-              <span className="fw-semibold">
-                {hira.created_by?.full_name || "-"} ({hira.created_by?.role || "-"})
-              </span>
-            </div>
-            <div className="col-md-3">
-              <small className="text-muted d-block">Putaran Pengajuan</small>
-              <span className="fw-semibold">Revisi #{hira.submission_round}</span>
+          <div className="bg-light p-3 rounded mt-3">
+            <div className="row g-3">
+              <div className="col-md-3">
+                <small className="text-muted d-block">Proyek</small>
+                <span className="fw-semibold">{hira.project_name}</span>
+              </div>
+              <div className="col-md-3">
+                <small className="text-muted d-block">No. Dokumen</small>
+                <span className="fw-semibold">{hira.document_number || "Belum Diatur"}</span>
+              </div>
+              <div className="col-md-3">
+                <small className="text-muted d-block">Dibuat Oleh</small>
+                <span className="fw-semibold">
+                  {hira.created_by?.full_name || "-"} ({hira.created_by?.role || "-"})
+                </span>
+              </div>
+              <div className="col-md-3">
+                <small className="text-muted d-block">Putaran Pengajuan</small>
+                <span className="fw-semibold">Revisi #{hira.submission_round}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Action Bar (Dokumen Level) */}
+      {/* Action Bar */}
       {(canSubmit || canSetNumber || canCancel || canDeleteDraft) && (
         <div className="card shadow-sm border-0 mb-4 bg-white">
           <div className="card-body d-flex flex-wrap align-items-center gap-2">
@@ -603,7 +586,7 @@ export default function HiraDetail() {
         </div>
       )}
 
-      {/* Decision Box (Approve / Reject) */}
+      {/* Decision Box */}
       {canDecide && (
         <div className="card border-primary mb-4 shadow-sm">
           <div className="card-header bg-primary text-white fw-bold">
@@ -642,7 +625,7 @@ export default function HiraDetail() {
         </div>
       )}
 
-      {/* Cancel Box (HSE Coordinator) */}
+      {/* Cancel Box */}
       {canCancel && (
         <div className="card border-danger mb-4 shadow-sm">
           <div className="card-header bg-danger text-white fw-bold">
@@ -672,7 +655,7 @@ export default function HiraDetail() {
         </div>
       )}
 
-      {/* SECTION 2: IDENTIFIKASI BAHAYA & PENILAIAN RISIKO (GROUPS & ACTIVITIES) */}
+      {/* SECTION 2: GROUPS & ACTIVITIES */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h4 className="fw-bold mb-0">2. Identifikasi Bahaya &amp; Penilaian Risiko</h4>
         {isEditable && (
@@ -687,41 +670,53 @@ export default function HiraDetail() {
       ) : (
         editableGroups.map((grp: HiraGroup, gIdx: number) => (
           <div key={grp.id || `local-grp-${gIdx}`} className="card shadow-sm border-0 mb-4 border-start border-4 border-dark">
-            {/* Header Grup & Save Button */}
-            <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
-              <div className="flex-grow-1 me-3">
-                <input
-                  type="text"
-                  className="form-control form-control-sm fw-bold"
-                  placeholder="Lokasi / Fungsi Pekerjaan..."
-                  value={grp.location_function}
-                  onChange={(e) => handleGroupTextChange(gIdx, e.target.value)}
-                  disabled={!isEditable}
-                />
-              </div>
-              {isEditable && (
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-success btn-sm text-nowrap"
-                    onClick={() => handleSaveGroup(grp, gIdx)}
-                    disabled={actionLoading}
-                  >
-                    Simpan Grup Ini
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => handleDeleteGroup(gIdx, grp.id)}
-                    disabled={actionLoading}
-                  >
-                    Hapus Grup
-                  </button>
+            <div className="card-header bg-light py-3">
+              <div className="row g-2 align-items-end">
+                <div className={isEditable ? "col-md-5" : "col-md-6"}>
+                  <label className="form-label small fw-semibold text-muted mb-1">Lokasi / Fungsi Pekerjaan:</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm fw-bold"
+                    placeholder="Lokasi / Fungsi Pekerjaan..."
+                    value={grp.location_function}
+                    onChange={(e) => handleGroupTextChange(gIdx, "location_function", e.target.value)}
+                    disabled={!isEditable}
+                  />
                 </div>
-              )}
+                <div className={isEditable ? "col-md-5" : "col-md-6"}>
+                  <label className="form-label small fw-semibold text-muted mb-1">Regulasi yang Berlaku:</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="Contoh: - UU No.1 Tahun 1970"
+                    value={grp.applicable_regulation || ""}
+                    onChange={(e) => handleGroupTextChange(gIdx, "applicable_regulation", e.target.value)}
+                    disabled={!isEditable}
+                  />
+                </div>
+                {isEditable && (
+                  <div className="col-md-2 d-flex gap-1 justify-content-end align-items-end">
+                    <button
+                      type="button"
+                      className="btn btn-success btn-sm text-nowrap"
+                      onClick={() => handleSaveGroup(grp, gIdx)}
+                      disabled={actionLoading}
+                    >
+                      Simpan
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => handleDeleteGroup(gIdx, grp.id)}
+                      disabled={actionLoading}
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* List Aktivitas */}
             <div className="card-body">
               {grp.activities.map((act: HiraActivity, aIdx: number) => {
                 const initialRisk = calculateRisk(act.initial_severity, act.initial_likelihood);
@@ -754,7 +749,7 @@ export default function HiraDetail() {
                     </div>
 
                     <div className="row g-2 mb-2">
-                      <div className="col-md-5">
+                      <div className="col-md-8">
                         <label className="form-label small fw-semibold">Nama Aktivitas *</label>
                         <input
                           type="text"
@@ -767,7 +762,7 @@ export default function HiraDetail() {
                           disabled={!isEditable}
                         />
                       </div>
-                      <div className="col-md-3">
+                      <div className="col-md-4">
                         <label className="form-label small fw-semibold">Sifat Pekerjaan *</label>
                         <select
                           className="form-select form-select-sm"
@@ -787,19 +782,6 @@ export default function HiraDetail() {
                           <option value="E">E (Darurat)</option>
                         </select>
                       </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-semibold">Regulasi Berlaku</label>
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          placeholder="Contoh: UU No.1 Th 1970"
-                          value={act.applicable_regulation || ""}
-                          onChange={(e) =>
-                            handleActivityFieldChange(gIdx, aIdx, "applicable_regulation", e.target.value)
-                          }
-                          disabled={!isEditable}
-                        />
-                      </div>
                     </div>
 
                     <div className="row g-2 mb-2">
@@ -808,7 +790,6 @@ export default function HiraDetail() {
                         <textarea
                           className="form-control form-control-sm"
                           rows={2}
-                          placeholder="Contoh: Terlindas truk, Terjatuh dari truk"
                           value={act.potential_hazard}
                           onChange={(e) =>
                             handleActivityFieldChange(gIdx, aIdx, "potential_hazard", e.target.value)
@@ -821,7 +802,6 @@ export default function HiraDetail() {
                         <textarea
                           className="form-control form-control-sm"
                           rows={2}
-                          placeholder="Contoh: Luka, Cidera, Shock"
                           value={act.risk_impact}
                           onChange={(e) =>
                             handleActivityFieldChange(gIdx, aIdx, "risk_impact", e.target.value)
@@ -831,7 +811,7 @@ export default function HiraDetail() {
                       </div>
                     </div>
 
-                    {/* Matrix Risiko Awal */}
+                    {/* Risiko Awal */}
                     <div className="p-2 mb-2 bg-white rounded border">
                       <div className="fw-semibold small mb-2 text-dark">
                         Risiko Awal (Live Preview: Rt = {initialRisk.score} | Category = {initialRisk.category})
@@ -870,37 +850,7 @@ export default function HiraDetail() {
                       </div>
                     </div>
 
-                    {/* Pengendalian */}
-                    <div className="row g-2 mb-2">
-                      <div className="col-md-8">
-                        <label className="form-label small fw-semibold">Pengendalian Awal</label>
-                        <textarea
-                          className="form-control form-control-sm"
-                          rows={2}
-                          placeholder="Contoh: Security mengatur lalu lintas..."
-                          value={act.existing_controls || ""}
-                          onChange={(e) =>
-                            handleActivityFieldChange(gIdx, aIdx, "existing_controls", e.target.value)
-                          }
-                          disabled={!isEditable}
-                        />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-semibold">Kategori Pengendalian</label>
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          placeholder="Contoh: ADM, APD"
-                          value={act.control_category || "ADM, APD"}
-                          onChange={(e) =>
-                            handleActivityFieldChange(gIdx, aIdx, "control_category", e.target.value)
-                          }
-                          disabled={!isEditable}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Matrix Sisa Risiko */}
+                    {/* Sisa Risiko */}
                     <div className="p-2 mb-2 bg-white rounded border">
                       <div className="fw-semibold small mb-2 text-dark">
                         Sisa Risiko (Live Preview: Rt = {residualRisk.score} | Acceptable = {residualRisk.isAcceptable ? "Y" : "N"})
@@ -939,19 +889,32 @@ export default function HiraDetail() {
                       </div>
                     </div>
 
-                    {/* Peluang */}
-                    <div>
-                      <label className="form-label small fw-semibold">Peluang (Opsional)</label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        placeholder="Catatan peluang perbaikan..."
-                        value={act.opportunity || ""}
-                        onChange={(e) =>
-                          handleActivityFieldChange(gIdx, aIdx, "opportunity", e.target.value)
-                        }
-                        disabled={!isEditable}
-                      />
+                    {/* Pengendalian */}
+                    <div className="row g-2">
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold">Pengendalian Awal</label>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={2}
+                          value={act.existing_controls || ""}
+                          onChange={(e) =>
+                            handleActivityFieldChange(gIdx, aIdx, "existing_controls", e.target.value)
+                          }
+                          disabled={!isEditable}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold">Kategori Pengendalian</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={act.control_category || "ADM, APD"}
+                          onChange={(e) =>
+                            handleActivityFieldChange(gIdx, aIdx, "control_category", e.target.value)
+                          }
+                          disabled={!isEditable}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -970,57 +933,6 @@ export default function HiraDetail() {
           </div>
         ))
       )}
-
-      {/* Histori Approval */}
-      <h4 className="fw-bold mb-3">Histori Persetujuan</h4>
-      <div className="card shadow-sm border-0 mb-5">
-        <div className="card-body">
-          {hira.approvals.length === 0 ? (
-            <p className="text-muted mb-0">Belum ada riwayat persetujuan.</p>
-          ) : (
-            <ul className="list-group list-group-flush">
-              {hira.approvals.map((app: HiraApproval) => {
-                const stageName = app.step || app.stage || "-";
-                const decBy = app.decided_by?.full_name || app.decided_by_name || "-";
-                const notes = app.remarks || app.notes;
-                const statusVal = app.decision || app.status || "-";
-
-                return (
-                  <li
-                    key={app.id}
-                    className="list-group-item d-flex justify-content-between align-items-start py-3"
-                  >
-                    <div>
-                      <div className="fw-bold text-capitalize">
-                        Tahap: {stageName.replace("_", " ")}
-                      </div>
-                      <div className="small text-muted">
-                        Oleh: {decBy} | Waktu: {app.decided_at || "-"}
-                      </div>
-                      {notes && (
-                        <div className="mt-1 small bg-light p-2 rounded">
-                          Catatan: {notes}
-                        </div>
-                      )}
-                    </div>
-                    <span
-                      className={`badge ${
-                        statusVal === "approved"
-                          ? "bg-success"
-                          : statusVal === "rejected"
-                          ? "bg-danger"
-                          : "bg-warning text-dark"
-                      }`}
-                    >
-                      {statusVal}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

@@ -69,7 +69,11 @@ export default function HiraList() {
     };
 
     const config = badgeMap[status] || { label: status, bg: "bg-secondary" };
-    return <span className={`badge ${config.bg}`}>{config.label}</span>;
+    return (
+      <span className={`badge ${config.bg}`} style={{ whiteSpace: "nowrap" }}>
+        {config.label}
+      </span>
+    );
   };
 
   return (
@@ -128,13 +132,13 @@ export default function HiraList() {
             {/* Button Reset Filter */}
             <div className="col-md-2 d-flex align-items-end">
               <button
-                className="btn btn-outline-secondary w-100"
-                onClick={() => {
-                  setSelectedProject("");
-                  setSelectedStatus("");
-                }}
+              className="btn btn-outline-secondary w-100 d-inline-flex align-items-center justify-content-center gap-2"
+              onClick={() => {
+              setSelectedProject("");
+              setSelectedStatus("");
+            }}
               >
-                Reset Filter
+              <i className="bi bi-arrow-counterclockwise"></i> Reset Filter
               </button>
             </div>
 
@@ -152,15 +156,15 @@ export default function HiraList() {
       {/* Table Data HIRA */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="table-responsive">
-          <table className="table table-hover align-middle mb-0">
+          <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: 1100 }}>
             <thead className="table-light border-bottom">
               <tr>
-                <th className="py-3 px-3">No. Dokumen</th>
-                <th className="py-3 px-3">Paket & Area Pekerjaan</th>
-                <th className="py-3 px-3">Proyek</th>
-                <th className="py-3 px-3">Dibuat Oleh</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-center">Aksi</th>
+                <th className="py-3 px-3" style={{ width: "13%" }}>No. Dokumen</th>
+                <th className="py-3 px-3" style={{ width: "25%" }}>Paket & Area Pekerjaan</th>
+                <th className="py-3 px-3" style={{ width: "17%" }}>Proyek</th>
+                <th className="py-3 px-3" style={{ width: "18%" }}>Dibuat Oleh</th>
+                <th className="py-3 px-3 text-center" style={{ width: "17%" }}>Status</th>
+                <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Aksi</th>
               </tr>
             </thead>
             <tbody>

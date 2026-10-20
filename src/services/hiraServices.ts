@@ -153,24 +153,23 @@ export const setHiraDocumentNumber = async (
 // 4. HIRA GROUP SERVICES (/hira/groups/)
 // ==========================================
 
-/**
- * Mengambil daftar group berdasarkan ID dokumen HIRA
- */
-export const getHiraGroups = async (hira_document: number | string): Promise<HiraGroup[]> => {
-  const response = await api.get<HiraGroup[]>("/hira/groups/", {
-    params: { hira_document },
-  });
-  return response.data;
-};
+export interface CreateHiraGroupPayload {
+  hira_document: number | string;
+  location_function: string;
+  applicable_regulation?: string; // Ditambahkan di sini
+  order?: number;
+}
+
+export interface UpdateHiraGroupPayload {
+  location_function?: string;
+  applicable_regulation?: string; // Ditambahkan di sini
+  order?: number;
+}
 
 /**
  * Membuat group lokasi/fungsi baru
  */
-export const createHiraGroup = async (payload: {
-  hira_document: number | string;
-  location_function: string;
-  order?: number;
-}): Promise<HiraGroup> => {
+export const createHiraGroup = async (payload: CreateHiraGroupPayload): Promise<HiraGroup> => {
   const response = await api.post<HiraGroup>("/hira/groups/", payload);
   return response.data;
 };
@@ -180,7 +179,7 @@ export const createHiraGroup = async (payload: {
  */
 export const updateHiraGroup = async (
   id: number | string,
-  payload: { location_function?: string; order?: number }
+  payload: UpdateHiraGroupPayload
 ): Promise<HiraGroup> => {
   const response = await api.patch<HiraGroup>(`/hira/groups/${id}/`, payload);
   return response.data;

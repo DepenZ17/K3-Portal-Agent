@@ -185,9 +185,7 @@ function App() {
           }
         />
 
-        
-
-        {/* MENU UTAMA IZIN KERJA (Khusus Subkontraktor untuk membuat izin baru) */}
+        {/* MENU UTAMA IZIN KERJA */}
         <Route
           path="/work-permit"
           element={
@@ -219,49 +217,20 @@ function App() {
           }
         />
 
-        {/* DETAIL IZIN KERJA */}
-        <Route
-          path="/work-permit/:id"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <WorkPermitDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* PRINT IZIN KERJA */}
-        <Route
-          path="/work-permit/:id/print"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <WorkPermitPrint />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* FORM WORK PERMITS */}
+        {/* FORM WORK PERMITS (Create & Edit) */}
         <Route
           path="/work-permit/height"
+          element={
+            <ProtectedRoute allowedRoles={["subcontractor"]}>
+              <AppLayout>
+                <WorkPermitHeightForm />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/work-permit/:id/edit"
           element={
             <ProtectedRoute allowedRoles={["subcontractor"]}>
               <AppLayout>
@@ -310,6 +279,46 @@ function App() {
             <ProtectedRoute allowedRoles={["subcontractor"]}>
               <AppLayout>
                 <WorkPermitTowerCraneForm />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* DETAIL IZIN KERJA (Ditempatkan setelah rute spesifik form/edit) */}
+        <Route
+          path="/work-permit/:id"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+                "supervisor",
+                "project_manager",
+              ]}
+            >
+              <AppLayout>
+                <WorkPermitDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* PRINT IZIN KERJA */}
+        <Route
+          path="/work-permit/:id/print"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+                "supervisor",
+                "project_manager",
+              ]}
+            >
+              <AppLayout>
+                <WorkPermitPrint />
               </AppLayout>
             </ProtectedRoute>
           }

@@ -1,531 +1,213 @@
 // src/pages/workPermit/WorkPermitList.tsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../../services/api";
-import { useAuth } from "../../hooks/useAuth";
-import type {
-  WorkPermitListItem,
-  WorkPermitType,
-  WorkPermitStatus,
-} from "../../types/WorkPermitList";
-
-/** Data Dummy Fallback jika backend belum aktif/data kosong */
-const DUMMY_PERMITS: WorkPermitListItem[] = [
-  {
-    id: 101,
-    project: "Proyek Pembangunan Gedung A",
-    type: "HEIGHT",
-    location: "Lantai 5 - Sektor Utam",
-    date: "2026-09-28",
-    status: "SUBMITTED",
-    createdBy: "subcon_inti",
-    canClose: false,
-    hasBeforePhotos: false,
-    hasAfterPhotos: false,
-  },
-  {
-    id: 102,
-    project: "Proyek Pembangunan Gedung A",
-    type: "HOT_WORK",
-    location: "Basement 2 - Area Utility",
-    date: "2026-09-29",
-    status: "VERIFIED",
-    createdBy: "subcon_inti",
-    canClose: false,
-    hasBeforePhotos: true,
-    hasAfterPhotos: false,
-  },
-  {
-    id: 103,
-    project: "Proyek Pembangunan Gedung A",
-    type: "CONFINED_SPACE",
-    location: "Tangki Ground Water Reservoir",
-    date: "2026-09-30",
-    status: "APPROVED",
-    createdBy: "subcon_inti",
-    canClose: true,
-    hasBeforePhotos: true,
-    hasAfterPhotos: true,
-  },
-  {
-    id: 104,
-    project: "Proyek Pembangunan Gedung A",
-    type: "TOWER_CRANE",
-    location: "Zone 1 - Site Crane 02",
-    date: "2026-09-25",
-    status: "CLOSED",
-    createdBy: "subcon_mitra",
-    canClose: false,
-    hasBeforePhotos: true,
-    hasAfterPhotos: true,
-  },
-  {
-    id: 105,
-    project: "Proyek Pembangunan Gedung A",
-    type: "LIFTING",
-    location: "Area Loading Dock",
-    date: "2026-09-30",
-    status: "SUBMITTED",
-    createdBy: "subcon_mitra",
-    canClose: false,
-    hasBeforePhotos: false,
-    hasAfterPhotos: false,
-  },
-];
-
-/** Helper: label jenis izin (untuk tampilan user) */
-function typeLabel(type: WorkPermitType): string {
-  switch (type) {
-    case "HEIGHT":
-      return "Kerja di Ketinggian";
-    case "CONFINED_SPACE":
-      return "Ruang Terbatas";
-    case "HOT_WORK":
-      return "Pekerjaan Panas (Hot Work)";
-    case "LIFTING":
-      return "Pekerjaan Mengangkat";
-    case "TOWER_CRANE":
-      return "Instalasi / Segmen Tower Crane";
-    default:
-      return type;
-  }
-}
-
-/** Helper: badge status */
-function statusBadge(status: WorkPermitStatus) {
-  let className = "badge bg-secondary";
-  if (status === "DRAFT") className = "badge bg-secondary";
-  if (status === "SUBMITTED") className = "badge bg-info";
-  if (status === "VERIFIED") className = "badge bg-warning text-dark";
-  if (status === "APPROVED") className = "badge bg-success";
-  if (status === "CLOSED") className = "badge bg-dark";
-
-  return <span className={className}>{status}</span>;
-}
+import { useState, useEffect, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { getWorkPermits } from "../../services/workPermitServices";
+import type { WorkPermitDetail, WorkPermitStatus, RiskCategory } from "../../types/workPermit";
 
 export default function WorkPermitList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
-  const role = user?.role;
-  const username = user?.username;
+  const [permits, setPermits] = useState<WorkPermitDetail[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-  const [permits, setPermits] = useState<WorkPermitListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState<WorkPermitType | "ALL">("ALL");
+  // Filter States
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedRisk, setSelectedRisk] = useState<string>("");
 
-  // state untuk aksi verifikasi / approve / close
-  const [verifyingId, setVerifyingId] = useState<number | null>(null);
-  const [approvingId, setApprovingId] = useState<number | null>(null);
-  const [closingId, setClosingId] = useState<number | null>(null);
-
-  // state untuk modal close
-  const [selectedPermit, setSelectedPermit] = useState<WorkPermitListItem | null>(
-    null
-  );
-  const [completionPhotos, setCompletionPhotos] = useState<File[]>([]);
-  const [completionNote, setCompletionNote] = useState("");
-  const [submittingClose, setSubmittingClose] = useState(false);
-
-  /** Ambil list izin kerja dari backend dengan fallback Data Dummy */
-  const loadPermits = async () => {
+  const fetchPermits = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage("");
     try {
-      setLoading(true);
-      const res = await api.get<WorkPermitListItem[]>("/work-permit/");
-      if (res.data && res.data.length > 0) {
-        setPermits(res.data);
+      const params: Record<string, unknown> = { permit_type: "working_at_height" };
+      if (selectedStatus) params.status = selectedStatus;
+      if (selectedRisk) params.risk_category = selectedRisk;
+
+      const data = await getWorkPermits(params);
+      setPermits(data);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const backendMsg = err.response?.data?.detail || err.message;
+        setErrorMessage(`Gagal memuat daftar izin kerja: ${backendMsg}`);
       } else {
-        // Jika data dari API kosong, pakai dummy
-        setPermits(DUMMY_PERMITS);
+        setErrorMessage("Gagal memuat daftar izin kerja di ketinggian karena kesalahan tidak diketahui.");
       }
-    } catch (err) {
-      console.warn("Gagal terhubung ke API backend, menggunakan data dummy.");
-      setPermits(DUMMY_PERMITS);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStatus, selectedRisk]);
 
   useEffect(() => {
-    loadPermits();
-  }, []);
+    fetchPermits();
+  }, [fetchPermits]);
 
-  /** Filter tampilan berdasarkan tipe dan filter privasi Subcontractor */
-  const visiblePermits = permits.filter((p) => {
-    // Filter 1: Jika user adalah subcontractor, hanya tampilkan izin yang dibuatnya
-    if (role === "subcontractor" && p.createdBy !== username) {
-      return false;
-    }
-
-    // Filter 2: Filter berdasarkan dropdown jenis izin
-    if (filterType !== "ALL" && p.type !== filterType) {
-      return false;
-    }
-
-    return true;
-  });
-
-  /** Subcontractor boleh tutup izin: hanya izin miliknya + sudah approved + backend izinkan */
-  const canCloseUi = (permit: WorkPermitListItem) => {
+  // Helper Badge Status
+  const renderStatusBadge = (status: WorkPermitStatus) => {
+    const badgeMap: Record<WorkPermitStatus, { label: string; bg: string }> = {
+      draft: { label: "Draft", bg: "bg-secondary" },
+      pending_supervisor: { label: "Menunggu Supervisor", bg: "bg-warning text-dark" },
+      pending_officer: { label: "Menunggu HSE Officer", bg: "bg-warning text-dark" },
+      pending_pm: { label: "Menunggu Project Manager", bg: "bg-info text-dark" },
+      pending_mk: { label: "Menunggu Manajemen Konstruksi", bg: "bg-primary" },
+      approved: { label: "Disetujui", bg: "bg-success" },
+      rejected: { label: "Ditolak", bg: "bg-danger" },
+      pending_close: { label: "Menunggu Konfirmasi Tutup", bg: "bg-secondary text-white" },
+      closed: { label: "Ditutup", bg: "bg-dark" },
+      cancelled: { label: "Dibatalkan", bg: "bg-danger" },
+    };
+    const config = badgeMap[status] || { label: status, bg: "bg-secondary" };
     return (
-      role === "subcontractor" &&
-      username === permit.createdBy &&
-      permit.canClose &&
-      permit.status === "APPROVED"
+      <span className={`badge ${config.bg}`} style={{ whiteSpace: "nowrap" }}>
+        {config.label}
+      </span>
     );
   };
 
-  /** Buka modal tutup izin */
-  const openCloseModal = (permit: WorkPermitListItem) => {
-    setSelectedPermit(permit);
-    setCompletionPhotos([]);
-    setCompletionNote("");
-  };
-
-  /** Tutup modal */
-  const closeModal = () => {
-    if (submittingClose) return;
-    setSelectedPermit(null);
-    setCompletionPhotos([]);
-    setCompletionNote("");
-  };
-
-  /** Handle upload foto penyelesaian */
-  const handleCompletionPhotosChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    if (e.target.files) setCompletionPhotos(Array.from(e.target.files));
-  };
-
-  /** Konfirmasi close izin (upload foto + note) */
-  const handleConfirmClose = async () => {
-    if (!selectedPermit) return;
-
-    if (completionPhotos.length === 0) {
-      alert("Harap upload minimal satu foto bukti pekerjaan telah selesai.");
-      return;
-    }
-
-    if (
-      !confirm(
-        "Yakin menutup izin kerja ini? Pastikan pekerjaan sudah selesai dan area aman."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setSubmittingClose(true);
-      setClosingId(selectedPermit.id);
-
-      const formData = new FormData();
-      formData.append("note", completionNote);
-      completionPhotos.forEach((file) => {
-        formData.append("completion_photos", file);
-      });
-
-      await api.post(`/work-permit/${selectedPermit.id}/close/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      alert("Izin kerja berhasil ditutup.");
-      await loadPermits();
-      closeModal();
-    } catch (err) {
-      console.error("Gagal menutup via API, memperbarui UI secara lokal.", err);
-      // Update lokal jika API gagal (untuk pengetesan dengan dummy)
-      setPermits((prev) =>
-        prev.map((p) =>
-          p.id === selectedPermit.id ? { ...p, status: "CLOSED", canClose: false } : p
-        )
-      );
-      alert("Izin kerja berhasil ditutup (Simulasi Lokal).");
-      closeModal();
-    } finally {
-      setSubmittingClose(false);
-      setClosingId(null);
-    }
-  };
-
-  /** HSE Officer: verifikasi */
-  const handleVerify = async (permit: WorkPermitListItem) => {
-    if (
-      !confirm(
-        `Verifikasi izin kerja #${permit.id}? Tindakan ini hanya untuk HSE Officer.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setVerifyingId(permit.id);
-      await api.post(`/work-permit/${permit.id}/verify/`);
-      alert("Izin kerja berhasil diverifikasi.");
-      await loadPermits();
-    } catch (err) {
-      console.error("Gagal verifikasi via API, memperbarui UI secara lokal.", err);
-      setPermits((prev) =>
-        prev.map((p) => (p.id === permit.id ? { ...p, status: "VERIFIED" } : p))
-      );
-      alert("Izin kerja berhasil diverifikasi (Simulasi Lokal).");
-    } finally {
-      setVerifyingId(null);
-    }
-  };
-
-  /** Project Manager: approve */
-  const handleApprove = async (permit: WorkPermitListItem) => {
-    if (
-      !confirm(
-        `Approve izin kerja #${permit.id}? Pastikan sudah diverifikasi HSE Officer.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setApprovingId(permit.id);
-      await api.post(`/work-permit/${permit.id}/approve/`);
-      alert("Izin kerja berhasil di-approve.");
-      await loadPermits();
-    } catch (err) {
-      console.error("Gagal approve via API, memperbarui UI secara lokal.", err);
-      setPermits((prev) =>
-        prev.map((p) =>
-          p.id === permit.id ? { ...p, status: "APPROVED", canClose: true } : p
-        )
-      );
-      alert("Izin kerja berhasil di-approve (Simulasi Lokal).");
-    } finally {
-      setApprovingId(null);
-    }
+  // Helper Badge Risk Category
+  const renderRiskBadge = (category?: RiskCategory | string) => {
+    const colorMap: Record<string, { bg: string; color: string }> = {
+      R: { bg: "#198754", color: "#fff" },
+      M: { bg: "#ffc107", color: "#212529" },
+      T: { bg: "#fd7e14", color: "#fff" },
+      E: { bg: "#dc3545", color: "#fff" },
+    };
+    const c = category ? colorMap[category] : undefined;
+    return (
+      <span
+        className="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold"
+        style={{
+          width: 30,
+          height: 30,
+          fontSize: "0.8rem",
+          backgroundColor: c?.bg ?? "#6c757d",
+          color: c?.color ?? "#fff",
+        }}
+      >
+        {category || "-"}
+      </span>
+    );
   };
 
   return (
-    <div>
-      {/* Header + filter */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
+    <div className="container py-4">
+      {/* Header & Button Create */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="h4 mb-1">Daftar Izin Kerja</h1>
-          <p className="text-muted mb-0" style={{ fontSize: 14 }}>
-            Subcontractor mengajukan izin kerja. HSE Officer melakukan verifikasi, Project
-            Manager melakukan persetujuan, dan Subcontractor menutup izin setelah
-            pekerjaan selesai.
-          </p>
+          <h2 className="fw-bold text-dark mb-1">Izin Kerja di Ketinggian (Working at Height)</h2>
+          <p className="text-muted mb-0">Kelola dan pantau izin kerja berisiko tinggi di area ketinggian.</p>
         </div>
+        <Link to="/work-permit" className="btn btn-success fw-semibold">
+          + Buat Izin Kerja Baru
+        </Link>
+      </div>
 
-        <div className="d-flex align-items-center gap-2">
-          <label className="form-label mb-0" style={{ fontSize: 14 }}>
-            Filter jenis:
-          </label>
-          <select
-            className="form-select form-select-sm"
-            style={{ width: 230 }}
-            value={filterType}
-            onChange={(e) =>
-              setFilterType(
-                e.target.value === "ALL"
-                  ? "ALL"
-                  : (e.target.value as WorkPermitType)
-              )
-            }
-          >
-            <option value="ALL">Semua jenis</option>
-            <option value="HEIGHT">Kerja di Ketinggian</option>
-            <option value="CONFINED_SPACE">Ruang Terbatas</option>
-            <option value="HOT_WORK">Pekerjaan Panas (Hot Work)</option>
-            <option value="LIFTING">Pekerjaan Mengangkat</option>
-            <option value="TOWER_CRANE">Instalasi / Segmen Tower Crane</option>
-          </select>
+      {/* Filter Bar */}
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-body d-flex flex-wrap gap-3 align-items-center">
+          <div className="flex-grow-1" style={{ minWidth: "200px" }}>
+            <label className="form-label small fw-semibold">Filter Status:</label>
+            <select
+              className="form-select form-select-sm"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              <option value="">Semua Status</option>
+              <option value="draft">Draft</option>
+              <option value="pending_supervisor">Menunggu Supervisor</option>
+              <option value="pending_officer">Menunggu HSE Officer</option>
+              <option value="pending_pm">Menunggu Project Manager</option>
+              <option value="pending_mk">Menunggu Manajemen Konstruksi</option>
+              <option value="approved">Disetujui</option>
+              <option value="rejected">Ditolak</option>
+              <option value="pending_close">Menunggu Penutupan</option>
+              <option value="closed">Ditutup</option>
+              <option value="cancelled">Dibatalkan</option>
+            </select>
+          </div>
+
+          <div className="flex-grow-1" style={{ minWidth: "200px" }}>
+            <label className="form-label small fw-semibold">Filter Risiko:</label>
+            <select
+              className="form-select form-select-sm"
+              value={selectedRisk}
+              onChange={(e) => setSelectedRisk(e.target.value)}
+            >
+              <option value="">Semua Risiko</option>
+              <option value="R">Rendah (R)</option>
+              <option value="M">Sedang (M)</option>
+              <option value="T">Tinggi (T)</option>
+              <option value="E">Ekstrem (E)</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Tabel list */}
-      {loading ? (
-        <p>Sedang memuat data...</p>
-      ) : visiblePermits.length === 0 ? (
-        <div className="alert alert-info">Tidak ada izin kerja untuk filter ini.</div>
-      ) : (
-        <div className="card shadow-sm border-0">
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0 align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th style={{ width: 60 }}>ID</th>
-                    <th>Proyek</th>
-                    <th>Jenis</th>
-                    <th>Lokasi</th>
-                    <th style={{ width: 120 }}>Tanggal</th>
-                    <th style={{ width: 120 }}>Status</th>
-                    <th style={{ width: 160 }}>Dibuat oleh</th>
-                    <th style={{ width: 260 }}>Aksi</th>
+      {/* Error Alert */}
+      {errorMessage && <div className="alert alert-danger">{errorMessage}</div>}
+
+      {/* Table List */}
+      <div className="card shadow-sm border-0">
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: 900 }}>
+              <thead className="table-light small">
+              <tr>
+                <th className="ps-4" style={{ width: "14%" }}>No. Dokumen</th>
+                <th style={{ width: "18%" }}>Proyek / Lokasi</th>
+                <th style={{ width: "18%" }}>Aktivitas HIRA</th>
+                <th className="text-center" style={{ width: "10%" }}>Risiko</th>
+                <th style={{ width: "14%" }}>Tanggal Kerja</th>
+                <th style={{ width: "16%" }}>Status</th>
+                <th className="text-center pe-4" style={{ width: "10%" }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="small">
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-4 text-muted">
+                    Memuat daftar izin kerja...
+                  </td>
+                </tr>
+              ) : permits.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-4 text-muted">
+                    Belum ada data izin kerja di ketinggian.
+                  </td>
+                </tr>
+              ) : (
+                permits.map((item) => (
+                  <tr key={item.id}>
+                    <td className="ps-4 fw-semibold">{item.document_number || "Belum Diatur"}</td>
+                    <td>
+                      <div className="fw-semibold text-truncate">{item.project_name}</div>
+                      <div className="text-muted text-truncate">{item.work_location || "-"}</div>
+                    </td>
+                    <td>
+                      <div className="fw-semibold text-truncate">
+                        {item.hira_activity_name || item.work_description || "-"}
+                      </div>
+                      {item.hira_activity_name && item.work_description && (
+                        <div className="text-muted text-truncate">{item.work_description}</div>
+                      )}
+                    </td>
+                    <td className="text-center">{renderRiskBadge(item.risk_category)}</td>
+                    <td className="text-nowrap">{item.work_date || "-"}</td>
+                    <td>{renderStatusBadge(item.status)}</td>
+                    <td className="text-center pe-4">
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => navigate(`/work-permit/${item.id}`)}
+                      >
+                        Detail
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-
-                <tbody>
-                  {visiblePermits.map((permit) => {
-                    const hasWorkflowAction =
-                      (role === "hse_officer" && permit.status === "SUBMITTED") ||
-                      (role === "project_manager" && permit.status === "VERIFIED") ||
-                      canCloseUi(permit);
-
-                    return (
-                      <tr key={permit.id}>
-                        <td>#{permit.id}</td>
-                        <td>{permit.project}</td>
-                        <td>{typeLabel(permit.type)}</td>
-                        <td>{permit.location}</td>
-                        <td>{permit.date}</td>
-                        <td>{statusBadge(permit.status)}</td>
-                        <td>{permit.createdBy}</td>
-
-                        <td>
-                          {/* Aksi universal: Detail + Print */}
-                          <button
-                            className="btn btn-outline-secondary btn-sm me-2"
-                            onClick={() => navigate(`/work-permit/${permit.id}`)}
-                          >
-                            Detail
-                          </button>
-
-                          <button
-                            className="btn btn-outline-dark btn-sm me-2"
-                            onClick={() => navigate(`/work-permit/${permit.id}/print`)}
-                          >
-                            Print
-                          </button>
-
-                          {/* HSE Officer: Verifikasi */}
-                          {role === "hse_officer" && permit.status === "SUBMITTED" && (
-                            <button
-                              className="btn btn-outline-warning btn-sm me-2"
-                              onClick={() => handleVerify(permit)}
-                              disabled={verifyingId === permit.id}
-                            >
-                              {verifyingId === permit.id
-                                ? "Memverifikasi..."
-                                : "Verifikasi"}
-                            </button>
-                          )}
-
-                          {/* Project Manager: Approve */}
-                          {role === "project_manager" && permit.status === "VERIFIED" && (
-                            <button
-                              className="btn btn-outline-primary btn-sm me-2"
-                              onClick={() => handleApprove(permit)}
-                              disabled={approvingId === permit.id}
-                            >
-                              {approvingId === permit.id
-                                ? "Menyetujui..."
-                                : "Approve"}
-                            </button>
-                          )}
-
-                          {/* Subcontractor: Tutup izin setelah APPROVED */}
-                          {canCloseUi(permit) && (
-                            <button
-                              className="btn btn-outline-success btn-sm"
-                              onClick={() => openCloseModal(permit)}
-                              disabled={closingId === permit.id}
-                            >
-                              {closingId === permit.id ? "Menutup..." : "Tutup Izin"}
-                            </button>
-                          )}
-
-                          {!hasWorkflowAction && (
-                            <span className="text-muted" style={{ fontSize: 12 }}>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
-
-      {/* Modal Tutup Izin */}
-      {selectedPermit && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
-        >
-          <div className="card shadow-lg" style={{ width: "100%", maxWidth: 520 }}>
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <h2 className="h6 mb-0">Tutup Izin Kerja #{selectedPermit.id}</h2>
-
-              <button
-                type="button"
-                className="btn-close"
-                aria-label="Close"
-                onClick={closeModal}
-                disabled={submittingClose}
-              />
-            </div>
-
-            <div className="card-body">
-              <p className="text-muted" style={{ fontSize: 14 }}>
-                Pastikan pekerjaan sudah selesai dan area kerja aman. Upload minimal
-                satu foto sebagai bukti pekerjaan telah selesai.
-              </p>
-
-              <div className="mb-3">
-                <label className="form-label">Foto bukti selesai</label>
-                <input
-                  type="file"
-                  className="form-control"
-                  accept="image/*"
-                  multiple
-                  onChange={handleCompletionPhotosChange}
-                  disabled={submittingClose}
-                />
-                {completionPhotos.length > 0 && (
-                  <small className="text-muted d-block mt-1">
-                    {completionPhotos.length} file dipilih:{" "}
-                    {completionPhotos.map((f) => f.name).join(", ")}
-                  </small>
-                )}
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label">Catatan (opsional)</label>
-                <textarea
-                  className="form-control"
-                  rows={2}
-                  value={completionNote}
-                  onChange={(e) => setCompletionNote(e.target.value)}
-                  disabled={submittingClose}
-                  placeholder="Contoh: Pekerjaan selesai pukul 16:30, area sudah dibersihkan."
-                />
-              </div>
-            </div>
-
-            <div className="card-footer d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn btn-outline-secondary btn-sm"
-                onClick={closeModal}
-                disabled={submittingClose}
-              >
-                Batal
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-success btn-sm"
-                onClick={handleConfirmClose}
-                disabled={submittingClose}
-              >
-                {submittingClose ? "Menyimpan..." : "Konfirmasi Tutup Izin"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

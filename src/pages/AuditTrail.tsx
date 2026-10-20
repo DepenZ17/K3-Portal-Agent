@@ -4,6 +4,15 @@ import axios from "axios";
 import { getAuditLogs } from "../services/auditService";
 import type { AuditEntry, AuditAction, AuditQueryParams } from "../types/audit";
 
+// Label tampilan untuk resource_type dari backend (nilai asli tidak diubah)
+const RESOURCE_LABELS: Record<string, string> = {
+  "work_permit.workpermit": "Work Permit",
+  "hira.hiradocument": "HIRA Document",
+  "hira.hiragroup": "HIRA Group",
+  "hira.hiraactivity": "HIRA Activity",
+  "projects.project": "Project",
+};
+
 export default function AuditTrail() {
   const [logs, setLogs] = useState<AuditEntry[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -95,6 +104,12 @@ export default function AuditTrail() {
         return "bg-warning text-dark";
       case "cancelled":
         return "bg-secondary";
+      case "request_closed":
+        return "bg-warning text-dark";
+      case "closed":
+        return "bg-dark";
+      case "number_set":
+        return "bg-info text-white";
       default:
         return "bg-secondary";
     }
@@ -105,7 +120,7 @@ export default function AuditTrail() {
       {/* Header */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-2 border-bottom">
         <div>
-          <h2 className="h4 fw-bold text-dark mb-1">Audit Trail</h2>
+          <h2 className="h4 fw-bold text-dark mb-1">Audit Log</h2>
           <p className="text-muted small mb-0">
             Riwayat aktivitas dan catatan perubahan sistem keselamatan kerja (HSE).
           </p>
@@ -150,6 +165,7 @@ export default function AuditTrail() {
               />
             </div>
 
+            {/* Filter Tipe Aksi */}
             <div className="col-6 col-md-2">
               <label htmlFor="audit-action-filter" className="form-label fw-semibold text-secondary small">TIPE AKSI</label>
               <select
@@ -169,9 +185,13 @@ export default function AuditTrail() {
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="cancelled">Cancelled</option>
+                <option value="request_closed">Request Closed</option>
+                <option value="closed">Closed</option>
+                <option value="number_set">Number Set</option>
               </select>
             </div>
 
+            {/* Filter Resource Type */}
             <div className="col-6 col-md-3">
               <label htmlFor="audit-resource-type" className="form-label fw-semibold text-secondary small">RESOURCE TYPE</label>
               <select
@@ -184,6 +204,7 @@ export default function AuditTrail() {
                 }}
               >
                 <option value="">Semua Resource</option>
+                <option value="work_permit.workpermit">Work Permit</option>
                 <option value="hira.hiradocument">HIRA Document</option>
                 <option value="hira.hiragroup">HIRA Group</option>
                 <option value="hira.hiraactivity">HIRA Activity</option>
@@ -238,15 +259,15 @@ export default function AuditTrail() {
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0" style={{ minWidth: "900px" }}>
+            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead className="table-light border-bottom">
                 <tr className="text-secondary small fw-bold text-uppercase">
-                  <th className="py-3 px-3">Waktu</th>
-                  <th className="py-3 px-3">Aktor / User</th>
-                  <th className="py-3 px-3">Aksi</th>
-                  <th className="py-3 px-3">Resource</th>
-                  <th className="py-3 px-3">IP Address</th>
-                  <th className="py-3 px-3 text-center">Snapshot</th>
+                  <th className="py-3 px-3" style={{ width: "13%" }}>Waktu</th>
+                  <th className="py-3 px-3" style={{ width: "33%" }}>Aktor / User</th>
+                  <th className="py-3 px-3" style={{ width: "13%" }}>Aksi</th>
+                  <th className="py-3 px-3" style={{ width: "17%" }}>Resource</th>
+                  <th className="py-3 px-3" style={{ width: "14%" }}>IP Address</th>
+                  <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Snapshot</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,7 +275,7 @@ export default function AuditTrail() {
                   <tr>
                     <td colSpan={6} className="text-center py-5">
                       <div className="spinner-border text-success spinner-border-sm me-2" role="status"></div>
-                      <span className="text-muted small">Memuat data audit trail...</span>
+                      <span className="text-muted small">Memuat data audit log...</span>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
@@ -296,7 +317,9 @@ export default function AuditTrail() {
                       </td>
 
                       <td className="px-3">
-                        <span className="fw-semibold text-dark small">{log.resource_type}</span>
+                        <span className="fw-semibold text-dark small">
+                          {RESOURCE_LABELS[log.resource_type] || log.resource_type}
+                        </span>
                         <span className="text-muted ms-1 small">#{log.resource_id}</span>
                       </td>
 
@@ -309,7 +332,7 @@ export default function AuditTrail() {
                       <td className="px-3 text-center">
                         {log.snapshot ? (
                           <button
-                            className="btn btn-sm btn-outline-secondary py-0 px-2 fs-6"
+                            className="btn btn-sm btn-outline-secondary px-3"
                             onClick={() => setSelectedSnapshot(log.snapshot)}
                             title="Lihat Detail Snapshot"
                           >

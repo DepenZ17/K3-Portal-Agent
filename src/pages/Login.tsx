@@ -13,6 +13,7 @@ import type { AuthUser, Role } from "../types/auth";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -155,17 +156,27 @@ export default function Login() {
                     <label htmlFor="login-password" className="form-label fw-semibold text-secondary small">
                       PASSWORD
                     </label>
-                    <input
-                      id="login-password"
-                      name="password"
-                      type="password"
-                      className="form-control form-control-lg fs-6 bg-light border-1"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
+                    <div className="input-group">
+                      <input
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        className="form-control form-control-lg fs-6 bg-light border-1 border-end-0"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-light bg-light border border-start-0 text-muted"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                      >
+                        <i className={`bi ${showPassword ? "bi-eye-slash" : "bi-eye"}`}></i>
+                      </button>
+                    </div>
                   </div>
 
                   <button
