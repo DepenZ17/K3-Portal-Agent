@@ -159,3 +159,21 @@ export interface HiraFormPayload {
   document_date?: string;
   groups?: HiraGroup[];
 }
+
+// ==========================================
+// Paginasi & Filter HIRA (HiraList.tsx)
+// ==========================================
+
+export interface HiraQueryParams {
+  project?: number | string;
+  status?: HiraStatus;
+  page?: number;
+  page_size?: number;
+}
+
+export interface PaginatedHiraResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: HiraDocumentList[];
+}

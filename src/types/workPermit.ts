@@ -207,6 +207,19 @@ export interface WorkPermitListParams {
   status?: WorkPermitStatus;
   risk_category?: RiskCategory;
   permit_type?: PermitType;
+  page?: number;      // Tambahkan ini
+  page_size?: number; // Tambahkan ini
+}
+
+// ==========================================
+// Paginasi Work Permit (WorkPermitList.tsx)
+// ==========================================
+
+export interface PaginatedWorkPermitResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: WorkPermitListItem[];
 }
 
 /** Kunci aksi yang diizinkan (allowed actions) pada suatu dokumen izin kerja */

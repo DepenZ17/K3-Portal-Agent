@@ -46,14 +46,27 @@ export const getProjectById = async (id: number | string): Promise<Project> => {
 // 2. HIRA DOCUMENT SERVICES (/hira/documents/)
 // ==========================================
 
+export interface HiraQueryParams {
+  project?: number | string;
+  status?: HiraStatus;
+  page?: number;
+  page_size?: number;
+}
+
+export interface PaginatedHiraResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: HiraDocumentList[];
+}
+
 /**
  * Mengambil daftar dokumen HIRA (GET /hira/documents/)
  */
-export const getHiraDocuments = async (params?: {
-  project?: number | string;
-  status?: HiraStatus;
-}): Promise<HiraDocumentList[]> => {
-  const response = await api.get<HiraDocumentList[]>("/hira/documents/", { params });
+export const getHiraDocuments = async (
+  params?: HiraQueryParams
+): Promise<HiraDocumentList[] | PaginatedHiraResponse> => {
+  const response = await api.get<HiraDocumentList[] | PaginatedHiraResponse>("/hira/documents/", { params });
   return response.data;
 };
 

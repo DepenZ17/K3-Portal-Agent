@@ -9,9 +9,12 @@ export default function HiraList() {
   const [documents, setDocuments] = useState<HiraDocumentList[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   
-  // State Filter
+  // State Filter & Paginasi
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [page, setPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalItems, setTotalItems] = useState<number>(0);
 
   // UI State
   const [loading, setLoading] = useState<boolean>(true);
@@ -30,7 +33,7 @@ export default function HiraList() {
     fetchProjects();
   }, []);
 
-  // Load daftar HIRA berdasarkan filter
+  // Load daftar HIRA berdasarkan filter dan halaman aktif
   const fetchHiraList = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
@@ -39,8 +42,21 @@ export default function HiraList() {
       const data = await getHiraDocuments({
         project: selectedProject || undefined,
         status: (selectedStatus as HiraStatus) || undefined,
+        page,
+        page_size: 10,
       });
-      setDocuments(data);
+
+      // Menangani format respons paginasi standar ({ count, results }) maupun array langsung
+      if (Array.isArray(data)) {
+        setDocuments(data);
+        setTotalItems(data.length);
+        setTotalPages(1);
+      } else {
+        const paginatedData = data as { results?: HiraDocumentList[]; count?: number };
+        setDocuments(paginatedData.results || []);
+        setTotalItems(paginatedData.count || 0);
+        setTotalPages(Math.ceil((paginatedData.count || 0) / 10));
+      }
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const detail = err.response?.data?.detail || "Gagal memuat dokumen HIRA.";
@@ -51,7 +67,7 @@ export default function HiraList() {
     } finally {
       setLoading(false);
     }
-  }, [selectedProject, selectedStatus]);
+  }, [selectedProject, selectedStatus, page]);
 
   useEffect(() => {
     fetchHiraList();
@@ -102,7 +118,10 @@ export default function HiraList() {
                 name="project"
                 className="form-select"
                 value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
+                onChange={(e) => {
+                  setSelectedProject(e.target.value);
+                  setPage(1); // Reset ke halaman 1 saat filter berubah
+                }}
               >
                 <option value="">Semua Proyek</option>
                 {projects.map((proj) => (
@@ -121,7 +140,10 @@ export default function HiraList() {
                 name="status"
                 className="form-select"
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setPage(1); // Reset ke halaman 1 saat filter berubah
+                }}
               >
                 <option value="">Semua Status</option>
                 <option value="draft">Draft</option>
@@ -136,13 +158,14 @@ export default function HiraList() {
             {/* Button Reset Filter */}
             <div className="col-md-2 d-flex align-items-end">
               <button
-              className="btn btn-outline-secondary w-100 d-inline-flex align-items-center justify-content-center gap-2"
-              onClick={() => {
-              setSelectedProject("");
-              setSelectedStatus("");
-            }}
+                className="btn btn-outline-secondary w-100 d-inline-flex align-items-center justify-content-center gap-2"
+                onClick={() => {
+                  setSelectedProject("");
+                  setSelectedStatus("");
+                  setPage(1);
+                }}
               >
-              <i className="bi bi-arrow-counterclockwise"></i> Reset Filter
+                <i className="bi bi-arrow-counterclockwise"></i> Reset Filter
               </button>
             </div>
 
@@ -157,7 +180,7 @@ export default function HiraList() {
         </div>
       )}
 
-      {/* Table Data HIRA */}
+      {/* Table Data HIRA & Paginasi Wrapper */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: 1100 }}>
@@ -224,6 +247,37 @@ export default function HiraList() {
             </tbody>
           </table>
         </div>
+
+        {/* Footer & Paginasi */}
+        {!loading && totalPages > 1 && (
+          <div className="card-footer bg-white border-0 d-flex flex-column flex-md-row justify-content-between align-items-center py-3 px-3">
+            <small className="text-muted mb-2 mb-md-0">
+              Menampilkan {documents.length} dari total {totalItems} entri
+            </small>
+
+            <nav>
+              <ul className="pagination pagination-sm mb-0">
+                <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
+                  <button className="page-link me-1" onClick={() => setPage((p) => Math.max(p - 1, 1))}>
+                    &laquo; Prev
+                  </button>
+                </li>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <li key={pageNum} className={`page-item ${page === pageNum ? "active" : ""}`}>
+                    <button className="page-link" onClick={() => setPage(pageNum)}>
+                      {pageNum}
+                    </button>
+                  </li>
+                ))}
+                <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
+                  <button className="page-link ms-1" onClick={() => setPage((p) => Math.min(p + 1, totalPages))}>
+                    Next &raquo;
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        )}
       </div>
     </div>
   );

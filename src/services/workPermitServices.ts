@@ -12,9 +12,19 @@ import type {
 
 const BASE_URL = "/permits";
 
-// 1. Get List Work Permits (Mendukung filter query)
-export const getWorkPermits = async (params?: WorkPermitListParams): Promise<WorkPermitListItem[]> => {
-  const response = await api.get(`${BASE_URL}/`, { params });
+// Tambahkan interface ini (bisa ditaruh di workPermit.ts atau langsung di sini)
+export interface PaginatedWorkPermitResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: WorkPermitListItem[];
+}
+
+// 1. Get List Work Permits (Mendukung filter query & paginasi)
+export const getWorkPermits = async (
+  params?: WorkPermitListParams
+): Promise<WorkPermitListItem[] | PaginatedWorkPermitResponse> => {
+  const response = await api.get<WorkPermitListItem[] | PaginatedWorkPermitResponse>(`${BASE_URL}/`, { params });
   return response.data;
 };
 
