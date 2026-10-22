@@ -6,7 +6,7 @@ import type { AuditEntry, AuditAction, AuditQueryParams } from "../types/audit";
 
 // Label tampilan untuk resource_type dari backend (nilai asli tidak diubah)
 const RESOURCE_LABELS: Record<string, string> = {
-  "work_permit.workpermit": "Work Permit",
+  "permits.permit": "Work Permit",
   "hira.hiradocument": "HIRA Document",
   "hira.hiragroup": "HIRA Group",
   "hira.hiraactivity": "HIRA Activity",
@@ -104,7 +104,7 @@ export default function AuditTrail() {
         return "bg-warning text-dark";
       case "cancelled":
         return "bg-secondary";
-      case "request_closed":
+      case "close_requested":
         return "bg-warning text-dark";
       case "closed":
         return "bg-dark";
@@ -185,7 +185,7 @@ export default function AuditTrail() {
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="cancelled">Cancelled</option>
-                <option value="request_closed">Request Closed</option>
+                <option value="close_requested">Close Requested</option>
                 <option value="closed">Closed</option>
                 <option value="number_set">Number Set</option>
               </select>
@@ -204,7 +204,7 @@ export default function AuditTrail() {
                 }}
               >
                 <option value="">Semua Resource</option>
-                <option value="work_permit.workpermit">Work Permit</option>
+                <option value="permits.permit">Work Permit</option>
                 <option value="hira.hiradocument">HIRA Document</option>
                 <option value="hira.hiragroup">HIRA Group</option>
                 <option value="hira.hiraactivity">HIRA Activity</option>

@@ -3,12 +3,17 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { getWorkPermits } from "../../services/workPermitServices";
-import type { WorkPermitDetail, WorkPermitStatus, RiskCategory } from "../../types/workPermit";
+import type {
+  WorkPermitListItem,
+  WorkPermitListParams,
+  WorkPermitStatus,
+  RiskCategory,
+} from "../../types/workPermit";
 
 export default function WorkPermitList() {
   const navigate = useNavigate();
 
-  const [permits, setPermits] = useState<WorkPermitDetail[]>([]);
+  const [permits, setPermits] = useState<WorkPermitListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
@@ -20,9 +25,9 @@ export default function WorkPermitList() {
     setLoading(true);
     setErrorMessage("");
     try {
-      const params: Record<string, unknown> = { permit_type: "working_at_height" };
-      if (selectedStatus) params.status = selectedStatus;
-      if (selectedRisk) params.risk_category = selectedRisk;
+      const params: WorkPermitListParams = { permit_type: "working_at_height" };
+      if (selectedStatus) params.status = selectedStatus as WorkPermitStatus;
+      if (selectedRisk) params.risk_category = selectedRisk as RiskCategory;
 
       const data = await getWorkPermits(params);
       setPermits(data);
@@ -52,7 +57,7 @@ export default function WorkPermitList() {
       pending_mk: { label: "Menunggu Manajemen Konstruksi", bg: "bg-primary" },
       approved: { label: "Disetujui", bg: "bg-success" },
       rejected: { label: "Ditolak", bg: "bg-danger" },
-      pending_close: { label: "Menunggu Konfirmasi Tutup", bg: "bg-secondary text-white" },
+      pending_close: { label: "Menunggu Konfirmasi Penutupan", bg: "bg-secondary text-white" },
       closed: { label: "Ditutup", bg: "bg-dark" },
       cancelled: { label: "Dibatalkan", bg: "bg-danger" },
     };
@@ -106,8 +111,10 @@ export default function WorkPermitList() {
       <div className="card shadow-sm border-0 mb-4">
         <div className="card-body d-flex flex-wrap gap-3 align-items-center">
           <div className="flex-grow-1" style={{ minWidth: "200px" }}>
-            <label className="form-label small fw-semibold">Filter Status:</label>
+            <label htmlFor="permit-filter-status" className="form-label small fw-semibold">Filter Status:</label>
             <select
+              id="permit-filter-status"
+              name="status"
               className="form-select form-select-sm"
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -120,22 +127,24 @@ export default function WorkPermitList() {
               <option value="pending_mk">Menunggu Manajemen Konstruksi</option>
               <option value="approved">Disetujui</option>
               <option value="rejected">Ditolak</option>
-              <option value="pending_close">Menunggu Penutupan</option>
+              <option value="pending_close">Menunggu Konfirmasi Penutupan</option>
               <option value="closed">Ditutup</option>
               <option value="cancelled">Dibatalkan</option>
             </select>
           </div>
 
           <div className="flex-grow-1" style={{ minWidth: "200px" }}>
-            <label className="form-label small fw-semibold">Filter Risiko:</label>
+            <label htmlFor="permit-filter-risk" className="form-label small fw-semibold">Filter Risiko:</label>
             <select
+              id="permit-filter-risk"
+              name="risk_category"
               className="form-select form-select-sm"
               value={selectedRisk}
               onChange={(e) => setSelectedRisk(e.target.value)}
             >
               <option value="">Semua Risiko</option>
               <option value="R">Rendah (R)</option>
-              <option value="M">Sedang (M)</option>
+              <option value="M">Menengah (M)</option>
               <option value="T">Tinggi (T)</option>
               <option value="E">Ekstrem (E)</option>
             </select>
@@ -150,7 +159,7 @@ export default function WorkPermitList() {
       <div className="card shadow-sm border-0">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: 900 }}>
-              <thead className="table-light small">
+            <thead className="table-light small">
               <tr>
                 <th className="ps-4" style={{ width: "14%" }}>No. Dokumen</th>
                 <th style={{ width: "18%" }}>Proyek / Lokasi</th>

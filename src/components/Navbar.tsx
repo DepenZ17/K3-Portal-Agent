@@ -101,12 +101,6 @@ export default function Navbar() {
             </li>
 
             <li className="nav-item">
-              <Link className="nav-link px-2" to="/equipment" onClick={() => setIsOpen(false)}>
-                Equipment
-              </Link>
-            </li>
-
-            <li className="nav-item">
               <Link className="nav-link px-2 text-nowrap" to="/rules" onClick={() => setIsOpen(false)}>
                 Rule &amp; Law
               </Link>
@@ -174,7 +168,7 @@ export default function Navbar() {
             {user && (
               <div className="d-none d-xl-flex align-items-center bg-white bg-opacity-10 rounded-pill ps-3 pe-2 py-1 border border-white border-opacity-25 gap-2">
                 <span className="text-white small fw-semibold text-truncate" style={{ maxWidth: "120px" }}>
-                  {user.full_name || user.username}
+                  {user.full_name}
                 </span>
                 <span 
                   className="badge bg-white text-success fw-bold text-uppercase px-2 py-1" 

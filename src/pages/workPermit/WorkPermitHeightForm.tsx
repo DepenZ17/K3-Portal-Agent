@@ -8,9 +8,16 @@ import {
   updateWorkPermit, 
   getWorkPermitById, 
   getWorkPermitFormSchema, 
-  submitWorkPermit 
+  submitWorkPermit,
+  uploadWorkPermitPhotos
 } from "../../services/workPermitServices";
-import type { HeightChecklist, WorkPermitPayload } from "../../types/workPermit";
+import type {
+  HeightChecklist,
+  WorkPermitPayload,
+  WorkPermitDetail,
+  GpsLocationData,
+  PermitPhoto,
+} from "../../types/workPermit";
 
 interface ProjectOption {
   id: number;
@@ -44,6 +51,9 @@ export default function WorkPermitHeightForm() {
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
 
+  // ID draft yang sudah tersimpan saat mode create (mencegah draft ganda & foto terunggah dua kali)
+  const [draftId, setDraftId] = useState<number | null>(null);
+
   // Form Field States
   const [projectId, setProjectId] = useState<number | "">("");
   const [hiraActivityId, setHiraActivityId] = useState<number | "">("");
@@ -51,9 +61,14 @@ export default function WorkPermitHeightForm() {
   const [workStart, setWorkStart] = useState<string>("08:00");
   const [workEnd, setWorkEnd] = useState<string>("16:00");
   const [workLocation, setWorkLocation] = useState<string>("");
-  const [gpsLocation, setGpsLocation] = useState<string>(""); // Tambahan GPS Location
-  const [photo, setPhoto] = useState<File | null>(null);       // Tambahan File Foto
+  
+  // GPS Granular State (untuk validasi akurasi max 50 meter)
+  const [gpsData, setGpsData] = useState<GpsLocationData | null>(null);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+  
+  const [photoFile, setPhotoFile] = useState<File | null>(null); // File foto sebelum kerja (before)
+  const [photoInputKey, setPhotoInputKey] = useState<number>(0); // Untuk mengosongkan input file setelah upload
+  const [existingPhotos, setExistingPhotos] = useState<PermitPhoto[]>([]); // Foto yang sudah diunggah sebelumnya
   
   const [workDescription, setWorkDescription] = useState<string>("");
   const [equipmentUsed, setEquipmentUsed] = useState<string>("");
@@ -100,7 +115,7 @@ export default function WorkPermitHeightForm() {
     "14": "Bahan kimia B3 aman, ada MSDS & label jelas",
   };
 
-  // Handler Ambil Lokasi GPS Otomatis
+  // Handler Ambil Lokasi GPS Granular (Enforcement Akurasi Maksimal 50 Meter)
   const handleGetGps = () => {
     if (!navigator.geolocation) {
       alert("Geolocation tidak didukung oleh browser Anda.");
@@ -109,16 +124,20 @@ export default function WorkPermitHeightForm() {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        setGpsLocation(`${lat}, ${lng}`);
+        const newGps: GpsLocationData = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy, // dalam meter
+          captured_at: new Date(position.timestamp).toISOString(),
+        };
+        setGpsData(newGps);
         setGpsLoading(false);
       },
       () => {
         alert("Gagal mendeteksi lokasi GPS. Pastikan izin lokasi diaktifkan.");
         setGpsLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } // maximumAge: 0 memaksa fresh reading
     );
   };
 
@@ -130,36 +149,42 @@ export default function WorkPermitHeightForm() {
         const schemaRes = await getWorkPermitFormSchema("working_at_height");
         const schemaData = schemaRes?.data || schemaRes;
 
-        if (schemaData?.safety_areas) {
-          const areasArray = Object.entries(schemaData.safety_areas).map(([code, name]) => ({
-            code,
-            name: name as string,
-          }));
-          setAvailableSafetyAreas(areasArray);
-        } else {
-          setAvailableSafetyAreas([
-            { code: "A", name: "Area Perifer (Pinggiran)" },
-            { code: "B", name: "Area Pit Lift/ Tangga" },
-            { code: "C", name: "Pekerjaan perbaikan/ perawatan di ketinggian" }
-          ]);
-        }
+        // Fallback dipakai juga jika schema kosong (service mengembalikan array kosong saat gagal)
+        const areasArray = schemaData?.safety_areas
+          ? Object.entries(schemaData.safety_areas).map(([code, name]) => ({
+              code,
+              name: name as string,
+            }))
+          : [];
+        setAvailableSafetyAreas(
+          areasArray.length > 0
+            ? areasArray
+            : [
+                { code: "A", name: "Area Perifer (Pinggiran)" },
+                { code: "B", name: "Area Pit Lift/ Tangga" },
+                { code: "C", name: "Pekerjaan perbaikan/ perawatan di ketinggian" },
+              ]
+        );
 
-        if (schemaData?.ppe) {
-          const ppeArray = Object.entries(schemaData.ppe).map(([key, name]) => ({
-            key,
-            name: name as string,
-          }));
-          setAvailablePpeOptions(ppeArray);
-        } else {
-          setAvailablePpeOptions([
-            { key: "sarung_tangan", name: "Sarung tangan" },
-            { key: "safety_belt", name: "Safety Belt" },
-            { key: "body_harness", name: "Body Harness" },
-            { key: "sepatu", name: "Sepatu" }
-          ]);
-        }
+        const rawPpe = schemaData?.ppe ?? schemaData?.ppe_options;
+        const ppeArray = rawPpe
+          ? Object.entries(rawPpe).map(([key, name]) => ({
+              key,
+              name: name as string,
+            }))
+          : [];
+        setAvailablePpeOptions(
+          ppeArray.length > 0
+            ? ppeArray
+            : [
+                { key: "sarung_tangan", name: "Sarung tangan" },
+                { key: "safety_belt", name: "Safety Belt" },
+                { key: "body_harness", name: "Body Harness" },
+                { key: "sepatu", name: "Sepatu" },
+              ]
+        );
 
-        const projRes = await api.get("/projects/");
+        const projRes = await api.get("/projects/", { params: { is_active: true } });
         setProjects(Array.isArray(projRes.data) ? projRes.data : projRes.data?.results || []);
 
         if (isEditMode && id) {
@@ -170,7 +195,11 @@ export default function WorkPermitHeightForm() {
           setWorkStart(detail.work_start);
           setWorkEnd(detail.work_end);
           setWorkLocation(detail.work_location);
-          setGpsLocation(detail.gps_location || ""); // Muat GPS
+          
+          if (detail.photos) {
+            setExistingPhotos(detail.photos);
+          }
+
           setWorkDescription(detail.work_description);
           setEquipmentUsed(detail.equipment_used || "");
           setPersonInCharge(detail.person_in_charge);
@@ -271,6 +300,26 @@ export default function WorkPermitHeightForm() {
       return;
     }
 
+    // Validasi wajib GPS dan Akurasi Maksimal 50 Meter saat hendak Submit
+    if (shouldSubmit) {
+      if (!gpsData) {
+        setErrorMessage("Data GPS wajib diambil untuk melakukan submit izin kerja.");
+        setLoading(false);
+        return;
+      }
+      if (gpsData.accuracy > 50) {
+        setErrorMessage(`Akurasi GPS terlalu rendah (${gpsData.accuracy.toFixed(1)} meter). Maksimal akurasi yang diizinkan adalah 50 meter.`);
+        setLoading(false);
+        return;
+      }
+      if (!photoFile && existingPhotos.filter(p => p.stage === "before").length === 0) {
+        setErrorMessage("Minimal satu foto sebelum kerja (before photo) wajib diunggah untuk melakukan submit.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Body create/update: JSON tanpa foto dan tanpa GPS
     const payload: WorkPermitPayload = {
       project: Number(projectId),
       hira_activity: Number(hiraActivityId),
@@ -279,8 +328,6 @@ export default function WorkPermitHeightForm() {
       work_start: workStart,
       work_end: workEnd,
       work_location: workLocation,
-      gps_location: gpsLocation,
-      photo: photo,
       work_description: workDescription,
       equipment_used: equipmentUsed,
       person_in_charge: personInCharge,
@@ -292,15 +339,27 @@ export default function WorkPermitHeightForm() {
     };
 
     try {
-      let savedPermit;
-      if (isEditMode && id) {
-        savedPermit = await updateWorkPermit(id, payload);
+      let savedPermit: WorkPermitDetail;
+      const targetId = id ?? draftId;
+
+      if (targetId) {
+        savedPermit = await updateWorkPermit(targetId, payload);
       } else {
         savedPermit = await createWorkPermit(payload);
+        setDraftId(savedPermit.id); // Klik berikutnya memperbarui draft ini, bukan membuat baru
       }
 
-      if (shouldSubmit) {
-        await submitWorkPermit(savedPermit.id);
+      // Unggah foto "before" jika ada file baru yang dipilih
+      if (photoFile) {
+        const withPhotos = await uploadWorkPermitPhotos(savedPermit.id, "before", [photoFile]);
+        setExistingPhotos(withPhotos.photos ?? []);
+        setPhotoFile(null);
+        setPhotoInputKey((k) => k + 1);
+      }
+
+      if (shouldSubmit && gpsData) {
+        // GpsLocationData sama dengan SubmitPermitPayload
+        await submitWorkPermit(savedPermit.id, gpsData);
       }
 
       navigate(`/work-permit/${savedPermit.id}`);
@@ -308,9 +367,13 @@ export default function WorkPermitHeightForm() {
       if (axios.isAxiosError(err)) {
         const errorData = err.response?.data;
         if (typeof errorData === "object" && errorData !== null) {
-          const firstKey = Object.keys(errorData)[0];
-          const errorMsg = Array.isArray(errorData[firstKey]) ? errorData[firstKey][0] : errorData[firstKey];
-          setErrorMessage(`Gagal menyimpan: [${firstKey}] ${errorMsg}`);
+          if (typeof errorData.detail === "string") {
+            setErrorMessage(errorData.detail);
+          } else {
+            const firstKey = Object.keys(errorData)[0];
+            const errorMsg = Array.isArray(errorData[firstKey]) ? errorData[firstKey][0] : errorData[firstKey];
+            setErrorMessage(`Gagal menyimpan: [${firstKey}] ${errorMsg}`);
+          }
         } else {
           setErrorMessage("Gagal menyimpan izin kerja.");
         }
@@ -447,14 +510,14 @@ export default function WorkPermitHeightForm() {
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label fw-semibold small">Koordinat GPS Lokasi:</label>
+              <label className="form-label fw-semibold small">Koordinat GPS Granular (Wajib untuk Submit):</label>
               <div className="input-group">
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Lat, Lng (Opsional)"
-                  value={gpsLocation}
-                  onChange={(e) => setGpsLocation(e.target.value)}
+                  readOnly
+                  placeholder="Belum diambil"
+                  value={gpsData ? `${gpsData.latitude.toFixed(5)}, ${gpsData.longitude.toFixed(5)} (Akurasi: ${gpsData.accuracy.toFixed(1)}m)` : ""}
                 />
                 <button 
                   type="button" 
@@ -470,6 +533,9 @@ export default function WorkPermitHeightForm() {
                   Ambil GPS
                 </button>
               </div>
+              <small className="text-muted" style={{ fontSize: "11px" }}>
+                Akurasi wajib maksimal 50 meter.
+              </small>
             </div>
           </div>
 
@@ -485,15 +551,20 @@ export default function WorkPermitHeightForm() {
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label fw-semibold small">Unggah Foto Lokasi / Kerja:</label>
+              <label className="form-label fw-semibold small">Unggah Foto Sebelum Kerja (Before Photo)*:</label>
               <input
+                key={photoInputKey}
                 type="file"
                 className="form-control"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 capture="environment"
-                onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+                onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
               />
-              <small className="text-muted" style={{ fontSize: "11px" }}>Ambil langsung dari kamera atau pilih file galeri.</small>
+              <small className="text-muted" style={{ fontSize: "11px" }}>
+                Wajib dilampirkan sebelum melakukan submit (JPEG, PNG, atau WebP, maksimal 5 MB).
+                {existingPhotos.filter((p) => p.stage === "before").length > 0 &&
+                  ` Sudah terunggah: ${existingPhotos.filter((p) => p.stage === "before").length} foto.`}
+              </small>
             </div>
           </div>
 

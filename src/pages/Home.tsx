@@ -78,13 +78,6 @@ export default function Home() {
 
         <div className="col-12 col-sm-6 col-lg-3">
           <CardMenu
-            title="Equipment & APD"
-            onClick={() => navigate("/equipment")}
-          />
-        </div>
-
-        <div className="col-12 col-sm-6 col-lg-3">
-          <CardMenu
             title="Rule & Law"
             onClick={() => navigate("/rules")}
           />

@@ -7,7 +7,7 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
 });
 
 // Sisipkan Access Token ke setiap Request (Kecuali endpoint Login)
@@ -68,10 +68,11 @@ api.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            return api(originalRequest);
+          (originalRequest as unknown as { _retry: boolean })._retry = true;
+          if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          }
+          return api(originalRequest);
           })
           .catch((refreshErr: unknown) => Promise.reject(refreshErr));
       }

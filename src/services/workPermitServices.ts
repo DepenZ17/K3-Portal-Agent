@@ -1,16 +1,19 @@
 // src/services/workPermitServices.ts
-import api from "./api"; // Menggunakan api.ts yang sudah ada
-import type { 
-  WorkPermitDetail, 
-  WorkPermitPayload, 
-  WorkPermitListParams, 
-  PermitType 
+import api from "./api";
+import type {
+  WorkPermitDetail,
+  WorkPermitListItem,
+  WorkPermitPayload,
+  WorkPermitListParams,
+  PermitType,
+  SubmitPermitPayload,
+  ApprovePermitPayload,
 } from "../types/workPermit";
 
 const BASE_URL = "/permits";
 
 // 1. Get List Work Permits (Mendukung filter query)
-export const getWorkPermits = async (params?: WorkPermitListParams): Promise<WorkPermitDetail[]> => {
+export const getWorkPermits = async (params?: WorkPermitListParams): Promise<WorkPermitListItem[]> => {
   const response = await api.get(`${BASE_URL}/`, { params });
   return response.data;
 };
@@ -28,27 +31,9 @@ export const getWorkPermitFormSchema = async (type: PermitType = "working_at_hei
   }
 };
 
-// 3. Create Work Permit (Mendukung FormData untuk GPS & Foto)
+// 3. Create Work Permit (JSON). Foto diunggah terpisah lewat uploadWorkPermitPhotos.
 export const createWorkPermit = async (payload: WorkPermitPayload): Promise<WorkPermitDetail> => {
-  const formData = new FormData();
-
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      if (key === "photo" && value instanceof File) {
-        formData.append("photo", value);
-      } else if (typeof value === "object") {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, String(value));
-      }
-    }
-  });
-
-  const response = await api.post(`${BASE_URL}/`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.post(`${BASE_URL}/`, payload);
   return response.data;
 };
 
@@ -56,9 +41,9 @@ export const createWorkPermit = async (payload: WorkPermitPayload): Promise<Work
 export const getApprovedHiraDocumentsByProject = async (projectId: number | string) => {
   try {
     const response = await api.get(`/hira/documents/`, {
-      params: { 
-        project: projectId, 
-        status: "approved" 
+      params: {
+        project: projectId,
+        status: "approved",
       },
     });
     return response.data;
@@ -74,30 +59,12 @@ export const getWorkPermitById = async (id: string | number): Promise<WorkPermit
   return response.data;
 };
 
-// 5. Update Work Permit (PATCH - Mendukung FormData untuk file foto & GPS)
+// 5. Update Work Permit (PATCH, JSON). Hanya saat draft atau rejected.
 export const updateWorkPermit = async (
-  id: string | number, 
+  id: string | number,
   payload: Partial<WorkPermitPayload>
 ): Promise<WorkPermitDetail> => {
-  const formData = new FormData();
-
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      if (key === "photo" && value instanceof File) {
-        formData.append("photo", value);
-      } else if (typeof value === "object") {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, String(value));
-      }
-    }
-  });
-
-  const response = await api.patch(`${BASE_URL}/${id}/`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.patch(`${BASE_URL}/${id}/`, payload);
   return response.data;
 };
 
@@ -110,19 +77,19 @@ export const deleteWorkPermit = async (id: string | number): Promise<void> => {
 // WORKFLOW & ACTION ENDPOINTS (/permits/{id}/<action>/)
 // ==========================================
 
-// Submit permit oleh creator
-export const submitWorkPermit = async (id: string | number): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/submit/`);
+// Submit permit oleh creator (wajib lokasi + minimal 1 foto "before")
+export const submitWorkPermit = async (id: string | number, locationData: SubmitPermitPayload): Promise<WorkPermitDetail> => {
+  const response = await api.post(`${BASE_URL}/${id}/submit/`, locationData);
   return response.data;
 };
 
-// Approve oleh role penanggung jawab (Supervisor, Officer, PM)
-export const approveWorkPermit = async (id: string | number, remarks?: string): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/approve/`, { remarks });
+// Approve oleh role penanggung jawab. Supervisor & HSE Officer wajib menyertakan lokasi, PM tidak.
+export const approveWorkPermit = async (id: string | number, payload?: ApprovePermitPayload): Promise<WorkPermitDetail> => {
+  const response = await api.post(`${BASE_URL}/${id}/approve/`, payload);
   return response.data;
 };
 
-// Reject (Wajib remarks/alasan)
+// Reject (Wajib remarks/alasan, tanpa lokasi)
 export const rejectWorkPermit = async (id: string | number, remarks: string): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/${id}/reject/`, { remarks });
   return response.data;
@@ -134,7 +101,7 @@ export const cancelWorkPermit = async (id: string | number, reason: string): Pro
   return response.data;
 };
 
-// Request Close oleh Creator (Wajib post_work_evaluation)
+// Request Close oleh Creator (wajib post_work_evaluation + minimal 1 foto "after")
 export const requestCloseWorkPermit = async (id: string | number, postWorkEvaluation: string): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/${id}/request-close/`, {
     post_work_evaluation: postWorkEvaluation,
@@ -142,7 +109,7 @@ export const requestCloseWorkPermit = async (id: string | number, postWorkEvalua
   return response.data;
 };
 
-// Confirm Close oleh HSE Officer (Saat status pending_close)
+// Confirm Close oleh HSE Officer (saat status pending_close)
 export const confirmCloseWorkPermit = async (id: string | number): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/${id}/confirm-close/`);
   return response.data;
@@ -154,4 +121,35 @@ export const setWorkPermitNumber = async (id: string | number, documentNumber: s
     document_number: documentNumber,
   });
   return response.data;
+};
+
+// ==========================================
+// EVIDENCE / PHOTO ENDPOINTS (/permits/{id}/photos/)
+// ==========================================
+
+// Upload foto bukti lapangan (JPEG/PNG/WebP, maks 5 MB per file, maks 5 per stage)
+// "before": saat draft/rejected. "after": saat approved, sebelum request-close.
+export const uploadWorkPermitPhotos = async (
+  id: string | number,
+  stage: "before" | "after",
+  files: File[]
+): Promise<WorkPermitDetail> => {
+  const formData = new FormData();
+  formData.append("stage", stage);
+
+  files.forEach((file) => {
+    formData.append("photos", file);
+  });
+
+  const response = await api.post(`${BASE_URL}/${id}/photos/`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+// Hapus foto bukti lapangan berdasarkan ID foto (aturan status sama dengan upload)
+export const deleteWorkPermitPhoto = async (id: string | number, photoId: string | number): Promise<void> => {
+  await api.delete(`${BASE_URL}/${id}/photos/${photoId}/`);
 };

@@ -8,7 +8,6 @@ import HiraList from "./pages/hira/HiraList";
 import HiraForm from "./pages/hira/HiraForm";
 import HiraDetail from "./pages/hira/HiraDetail";
 import AuditTrail from "./pages/AuditTrail";
-import Equipment from "./pages/Equipment";
 import Rules from "./pages/Rules";
 import WorkPermitList from "./pages/workPermit/WorkPermitList";
 import WorkPermitMenu from "./pages/WorkPermitMenu";
@@ -148,18 +147,6 @@ function App() {
             >
               <AppLayout>
                 <AuditTrail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Equipment */}
-        <Route
-          path="/equipment"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Equipment />
               </AppLayout>
             </ProtectedRoute>
           }

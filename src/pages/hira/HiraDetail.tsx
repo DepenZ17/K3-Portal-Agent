@@ -459,7 +459,7 @@ export default function HiraDetail() {
         <div className="alert alert-warning border-warning d-flex align-items-center mb-4">
           <div className="me-3 fs-3">⚠️</div>
           <div>
-            <strong>Peringatan Risiko Sisa!</strong> Dokumen ini memiliki aktivitas dengan Skor Risiko Sisa yang tidak dapat diterima. Dokumen tidak dapat disetujui sampai pengendalian disesuaikan[cite: 2].
+            <strong>Peringatan Risiko Sisa!</strong> Dokumen ini memiliki aktivitas dengan Skor Risiko Sisa yang tidak dapat diterima. Dokumen tidak dapat disetujui sampai pengendalian disesuaikan.
           </div>
         </div>
       )}

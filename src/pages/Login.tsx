@@ -4,11 +4,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../hooks/useAuth";
 
-// 🟢 Impor loginApi dari services/authService menggantikan panggilan api direct
+// Impor fungsi login dari services/authService
 import { login } from "../services/authService";
-
-// 🟢 Impor tipe AuthUser dan Role dari types/auth
-import type { AuthUser, Role } from "../types/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -35,29 +32,18 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
-      // 🟢 Memanggil fungsi loginApi dari authService.ts
       const data = await login({
         email,
         password,
       });
 
-      const token = data.access;
-
-      if (!token) {
-        throw new Error("Token autentikasi tidak ditemukan pada respon server.");
+      // Respons login yang valid selalu membawa access dan user
+      if (!data.access || !data.user) {
+        throw new Error("Respon login dari server tidak lengkap.");
       }
 
-      // 🟢 Tentukan userData dengan menyertakan id dan casting 'as Role'
-      const userData: AuthUser = data.user || {
-        id: 0,
-        email: email,
-        full_name: email,
-        role: "subcontractor" as Role,
-      };
-
-
-      // 🟢 Sekarang auth.login dapat dipanggil tanpa error TypeScript
-      auth.login(token, userData);
+      // refreshToken sudah disimpan oleh authService.login
+      auth.login(data.access, data.user);
 
       navigate("/home");
     } catch (err: unknown) {
@@ -69,8 +55,10 @@ export default function Login() {
             err.response.data?.error ||
             "Gagal masuk. Periksa email & password Anda.";
           setErrorMessage(serverError);
-        } else if (err.request) {
-          setErrorMessage("Gagal terhubung ke server backend Render. Coba beberapa saat lagi.");
+        } else if (err.code === "ECONNABORTED" || err.request) {
+          setErrorMessage(
+            "Server sedang aktif kembali atau tidak terjangkau. Tunggu sekitar satu menit lalu coba lagi."
+          );
         } else {
           setErrorMessage("Terjadi kesalahan jaringan.");
         }

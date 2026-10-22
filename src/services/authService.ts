@@ -5,7 +5,7 @@ import type { LoginRequest, LoginResponse, AuthUser } from "../types/auth";
 export const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
   const response = await api.post<LoginResponse>("/users/login/", credentials);
   
-  if (response.data.access && response.data.refresh) {
+  if (response.data.access && response.data.refresh && response.data.user) {
     localStorage.setItem("accessToken", response.data.access);
     localStorage.setItem("refreshToken", response.data.refresh);
     localStorage.setItem("user", JSON.stringify(response.data.user));

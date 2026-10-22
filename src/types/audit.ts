@@ -7,9 +7,9 @@ export type AuditAction =
   | "approved"
   | "rejected"
   | "cancelled"
-  | "request_closed"  // Tambahan untuk pengajuan tutup
-  | "closed"          // Tambahan untuk tutup resmi
-  | "number_set";     // Tambahan untuk penetapan no. dokumen
+  | "close_requested"  // Pengajuan tutup izin kerja (sesuai dokumen backend)
+  | "closed"           // Tutup resmi izin kerja
+  | "number_set";      // Tidak disebut di dokumen backend, hapus jika ternyata tidak pernah muncul
 
 export interface AuditEntry {
   id: string | number;
@@ -19,7 +19,7 @@ export interface AuditEntry {
   project: string | number | null;
   user: string | number | null;
   actor_label: string;
-  ip_address: string;
+  ip_address: string | null;
   user_agent: string;
   timestamp: string;
   remarks: string | null;
@@ -35,13 +35,13 @@ export interface AuditResponse {
 
 export interface AuditQueryParams {
   page?: number;
-  page_size?: number;
+  page_size?: number;        // Maksimal 200
   resource_type?: string;
   resource_id?: string;
   action?: string;
-  date_from?: string;
-  date_to?: string;
+  date_from?: string;        // YYYY-MM-DD
+  date_to?: string;          // YYYY-MM-DD
   project?: string;
   user?: string;
-  search?: string;
+  search?: string;           // Tidak ada di daftar filter dokumen, lihat catatan di bawah
 }

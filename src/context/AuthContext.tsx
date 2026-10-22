@@ -1,39 +1,42 @@
 // src/context/AuthContext.tsx
-import { createContext, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
-import type { AuthUser, Role } from "../types/auth";
-
-export interface AuthContextType {
-  user: AuthUser | null;
-  accessToken: string | null;
-  role: Role | "";
-  login: (token: string, userData: AuthUser) => void;
-  logout: () => void;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import type { AuthUser } from "../types/auth";
+import { AuthContext } from "./AuthContextDef";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem("user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      localStorage.removeItem("user");
+      return null;
+    }
   });
 
   const [accessToken, setAccessToken] = useState<string | null>(() => {
-    return localStorage.getItem("accessToken") || null;
+    try {
+      return localStorage.getItem("accessToken") || null;
+    } catch {
+      localStorage.removeItem("accessToken");
+      return null;
+    }
   });
 
-  const login = (token: string, userData: AuthUser) => {
+  const login = (token: string, userData: AuthUser, refreshToken?: string) => {
     setAccessToken(token);
     setUser(userData);
     localStorage.setItem("accessToken", token);
     localStorage.setItem("user", JSON.stringify(userData));
+    if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
   };
 
   const logout = () => {
     setAccessToken(null);
     setUser(null);
     localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
   };
 

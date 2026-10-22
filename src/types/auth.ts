@@ -7,17 +7,15 @@ export type Role =
   | "project_manager";
 
 export interface AuthUser {
-  id?: number;
+  id: number;
   email: string;
-  username?: string;
   full_name: string;
   role: Role;
   created_at?: string;
 }
 
 export interface LoginRequest {
-  email?: string;
-  username?: string;
+  email: string;
   password: string;
 }
 
@@ -25,4 +23,14 @@ export interface LoginResponse {
   access: string;
   refresh: string;
   user: AuthUser;
+}
+
+/** POST /users/token/refresh/ (refresh token berotasi, simpan refresh baru dari tiap respons) */
+export interface RefreshRequest {
+  refresh: string;
+}
+
+export interface RefreshResponse {
+  access: string;
+  refresh: string;
 }

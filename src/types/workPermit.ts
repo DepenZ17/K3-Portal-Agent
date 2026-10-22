@@ -23,11 +23,55 @@ export type WorkPermitStatus =
 /** Kategori tingkat risiko keselamatan kerja */
 export type RiskCategory = "R" | "M" | "T" | "E";
 
+/** Referensi singkat user dari server */
+export interface UserRef {
+  id: number;
+  full_name: string;
+  role: string;
+}
+
 /** ==========================================
- *  2. SAFETY CHECKLIST STRUCTURE
+ *  2. GPS & EVIDENCE STRUCTURES
  *  ========================================== */
 
-/** Struktur 14 Checklist Keselamatan untuk Working at Height (Key "1" s.d "14") */
+/** Data lokasi yang dikirim saat submit/ dan approve/ (Supervisor & HSE Officer) */
+export interface GpsLocationData {
+  latitude: number;
+  longitude: number;
+  accuracy: number;      // Akurasi dalam meter
+  captured_at: string;   // ISO timestamp saat GPS diambil
+}
+
+/** Stempel lokasi dari server (satu per step per putaran). Server tidak memverifikasi lokasi. */
+export interface PermitGeoStamp {
+  id: number;
+  step: "creator" | "supervisor" | "hse_officer" | string;
+  submission_round: number;
+  latitude: number | string;   // Bisa berupa string jika backend memakai Decimal
+  longitude: number | string;
+  accuracy: number | string;
+  captured_at: string;
+  recorded_by?: number | UserRef;
+  recorded_at?: string;
+}
+
+/** Foto bukti lapangan (before / after) */
+export interface PermitPhoto {
+  id: number;
+  stage: "before" | "after";
+  original_name: string;
+  content_type: string;
+  size: number;
+  uploaded_by?: number | UserRef;
+  uploaded_at: string;
+  url: string | null;        // Signed link, kedaluwarsa sekitar 1 jam. Bisa null jika storage down.
+}
+
+/** ==========================================
+ *  3. SAFETY CHECKLIST STRUCTURE
+ *  ========================================== */
+
+/** 14 Checklist Keselamatan Working at Height (key "1" s.d "14") */
 export interface HeightChecklist {
   "1": boolean; // SPK/kontrak ditandatangani
   "2": boolean; // Penanggung jawab ditentukan
@@ -47,10 +91,14 @@ export interface HeightChecklist {
 }
 
 /** ==========================================
- *  3. PAYLOAD INTERFACES (CREATE / UPDATE)
+ *  4. PAYLOAD INTERFACES (CREATE / UPDATE)
  *  ========================================== */
 
-/** Payload data yang dikirim ke backend untuk Create / Update Work Permit */
+/**
+ * Body untuk POST /permits/ dan PATCH /permits/{id}/ (JSON).
+ * Foto TIDAK dikirim di sini: gunakan POST /permits/{id}/photos/.
+ * Lokasi TIDAK dikirim di sini: gunakan submit/ dan approve/.
+ */
 export interface WorkPermitPayload {
   project: number;
   hira_activity: number;
@@ -59,8 +107,6 @@ export interface WorkPermitPayload {
   work_start: string;      // Format: "HH:MM"
   work_end: string;        // Format: "HH:MM"
   work_location: string;
-  gps_location?: string;   // Koordinat GPS opsional (Lat, Lng)
-  photo?: File | null;     // Berkas foto (kamera / galeri)
   work_description: string;
   equipment_used?: string;
   person_in_charge: string;
@@ -68,29 +114,33 @@ export interface WorkPermitPayload {
   safety_areas: string[];  // Contoh: ["A", "C"]
   checklist: HeightChecklist;
   ppe: string[];           // Contoh: ["body_harness", "sepatu"]
-  ppe_other?: string[];    // Contoh: ["Helm khusus"]
+  ppe_other?: string[];    // Maksimal 2 baris, tidak boleh kosong
+}
+
+/** Body untuk submit/ (semua field wajib) */
+export type SubmitPermitPayload = GpsLocationData;
+
+/** Body untuk approve/ (Supervisor & HSE Officer wajib menyertakan lokasi, PM tidak) */
+export interface ApprovePermitPayload extends Partial<GpsLocationData> {
+  remarks?: string;
 }
 
 /** ==========================================
- *  4. APPROVAL & WORKFLOW INTERFACES
+ *  5. APPROVAL & WORKFLOW INTERFACES
  *  ========================================== */
 
-/** Interface untuk item stepper rantai persetujuan (approval chain) */
+/** Item stepper rantai persetujuan (approval chain) */
 export interface ApprovalChainItem {
   step: "supervisor" | "hse_officer" | "project_manager" | "mk";
   state: "approved" | "rejected" | "pending" | "waiting";
 }
 
-/** Interface untuk mencatat histori keputusan approval */
+/** Histori keputusan approval */
 export interface WorkPermitApprovalHistory {
   id?: number;
   step: string;
   decision: string;
-  decided_by?: {
-    id: number;
-    full_name: string;
-    role: string;
-  };
+  decided_by?: UserRef;
   decided_by_name?: string;
   remarks?: string;
   submission_round: number;
@@ -98,74 +148,57 @@ export interface WorkPermitApprovalHistory {
 }
 
 /** ==========================================
- *  5. DETAIL RESPONSE INTERFACE
+ *  6. RESPONSE INTERFACES
  *  ========================================== */
 
-/** Struktur lengkap data Work Permit yang diterima dari server (Detail View) */
-export interface WorkPermitDetail extends Omit<WorkPermitPayload, "photo"> {
-  id: number;                   
-  project: number;                 
-  project_name: string;               
-  permit_type: PermitType;                
-  document_number?: string;           
-  work_date: string;                  
-  work_location: string;              
-  gps_location?: string;          // Koordinat GPS dari server
-  photo?: string | null;          // URL string foto dari server
-  work_description: string;           
-  status: WorkPermitStatus;           
-  risk_category: RiskCategory;        
-  submission_round: number;           
-  created_by?: {
-    id: number;
-    full_name: string;
-    role: string;
-  };                        
-  created_at: string;                 
-  updated_at: string;                 
+/** Item pada GET /permits/ (daftar). Field khusus detail tidak ada di sini. */
+export interface WorkPermitListItem {
+  id: number;
+  project: number;
+  project_name: string;
+  permit_type: PermitType;
+  document_number?: string;
+  work_date: string;
+  work_location: string;
+  work_description: string;
+  status: WorkPermitStatus;
+  risk_category?: RiskCategory;    // Baru terisi saat permit pertama kali di-submit
+  submission_round: number;
+  created_by?: UserRef;
+  created_at: string;
+  updated_at: string;
+  hira_activity_name?: string;     // Belum ada di list menurut dokumen, hanya jika backend menambahkannya
+}
 
-  hira_activity: number;               
-  hira_document: number;               
-  hira_activity_name: string;          
-  hira_initial_category: RiskCategory; 
-  work_start: string;                  
-  work_end: string;                    
-  equipment_used?: string;             
-  person_in_charge: string;            
-  worker_count: number;                
-  safety_areas: string[];              
-  checklist: HeightChecklist;  
-  ppe: string[];                       
-  ppe_other: string[];                 
+/** Respons lengkap GET /permits/{id}/ dan semua aksi workflow */
+export interface WorkPermitDetail extends WorkPermitListItem, WorkPermitPayload {
+  hira_activity_name: string;
+  hira_document: number;
+  hira_initial_category: RiskCategory;
 
-  approvals?: WorkPermitApprovalHistory[]; 
-  approval_chain?: ApprovalChainItem[];    
+  photos?: PermitPhoto[];
+  geo_stamps?: PermitGeoStamp[];
 
-  cancelled_by?: {
-    id: number;
-    full_name: string;
-    role: string;
-  };                        
-  cancelled_at?: string;               
-  cancel_reason?: string;              
-  post_work_evaluation?: string;       
-  close_requested_at?: string;         
-  closed_by?: {
-    id: number;
-    full_name: string;
-    role: string;
-  };                        
-  closed_at?: string;                  
+  approvals?: WorkPermitApprovalHistory[];
+  approval_chain?: ApprovalChainItem[];   // Kosong sebelum submit pertama
+
+  cancelled_by?: UserRef;
+  cancelled_at?: string;
+  cancel_reason?: string;
+  post_work_evaluation?: string;
+  close_requested_at?: string;
+  closed_by?: UserRef;
+  closed_at?: string;
 
   form?: {
-    code: string;
-    revision: string;
-  };                        
-  allowed_actions?: Record<string, boolean> | string[]; 
+    code: string;                 // Contoh: F.01/P.10/SHE/KPT
+    revision: string | number;
+  };
+  allowed_actions?: Record<string, boolean> | string[];
 }
 
 /** ==========================================
- *  6. QUERY PARAMS & PERMISSIONS
+ *  7. QUERY PARAMS & PERMISSIONS
  *  ========================================== */
 
 /** Parameter query filter untuk mengambil daftar Work Permits */
@@ -184,4 +217,7 @@ export type WorkPermitAllowedAction =
   | "can_cancel"
   | "can_request_close"
   | "can_confirm_close"
-  | "can_set_number";
+  | "can_set_number"
+  | "can_upload_before_photos"
+  | "can_upload_after_photos"
+  | "decide_requires_location";

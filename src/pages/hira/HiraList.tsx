@@ -96,8 +96,10 @@ export default function HiraList() {
             
             {/* Filter Project */}
             <div className="col-md-5">
-              <label className="form-label fw-semibold small text-secondary">FILTER PROYEK</label>
+              <label htmlFor="hira-filter-project" className="form-label fw-semibold small text-secondary">FILTER PROYEK</label>
               <select
+                id="hira-filter-project"
+                name="project"
                 className="form-select"
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
@@ -113,8 +115,10 @@ export default function HiraList() {
 
             {/* Filter Status */}
             <div className="col-md-5">
-              <label className="form-label fw-semibold small text-secondary">FILTER STATUS</label>
+              <label htmlFor="hira-filter-status" className="form-label fw-semibold small text-secondary">FILTER STATUS</label>
               <select
+                id="hira-filter-status"
+                name="status"
                 className="form-select"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
