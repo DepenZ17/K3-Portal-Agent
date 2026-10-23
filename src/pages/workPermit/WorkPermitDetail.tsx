@@ -404,9 +404,9 @@ export default function WorkPermitDetailComponent() {
       <div className="card shadow border-0 overflow-hidden mb-4">
         
         {/* Header */}
-        <div className="bg-primary text-white p-4 d-flex justify-content-between align-items-center">
-          <div>
-            <div className="d-flex gap-2 mb-2">
+        <div className="bg-primary text-white p-4 d-flex flex-column-reverse flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+          <div style={{ minWidth: 0 }}>
+            <div className="d-flex flex-wrap gap-2 mb-2">
               <span className="badge bg-light text-primary fw-bold">
                 {permit.form?.code || "F.01/P.10/SHE/KPT"} (Rev. {permit.form?.revision || "3"})
               </span>
@@ -414,12 +414,15 @@ export default function WorkPermitDetailComponent() {
                 {permit.status.replace("_", " ")}
               </span>
             </div>
-            <h2 className="fw-bold mb-1 text-white">
+                        <h2 className="fw-bold mb-1 text-white text-break">
               Izin Kerja di Ketinggian {permit.document_number ? `(${permit.document_number})` : "(Belum ada No. Dokumen)"}
             </h2>
-            <p className="mb-0 text-white-50 small">Proyek: {permit.project_name}</p>
+            <p className="mb-0 text-white-50 small text-break">Proyek: {permit.project_name}</p>
           </div>
-          <button className="btn btn-light btn-sm fw-semibold text-primary px-3 shadow-sm" onClick={() => navigate("/work-permit/list")}>
+          <button
+            className="btn btn-light btn-sm fw-semibold text-primary px-3 shadow-sm flex-shrink-0 text-nowrap"
+            onClick={() => navigate("/work-permit/list")}
+          >
             &larr; Kembali ke Daftar
           </button>
         </div>
