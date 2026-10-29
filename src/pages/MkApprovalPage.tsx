@@ -185,9 +185,9 @@ export default function MkApprovalPage() {
             <>
               <div className="mb-4 p-3 bg-light rounded border">
                 <h5 className="fw-bold text-dark mb-3">Detail Ringkas Pekerjaan</h5>
-                <p className="mb-1"><strong>Proyek:</strong> {String(permit?.project_name || "-")}</p>
+                <p className="mb-1"><strong>Proyek:</strong> {String(permit?.project || "-")}</p>
                 <p className="mb-1">
-                  <strong>Tanggal &amp; Waktu:</strong> {String(permit?.work_date || "")} ({String(permit?.work_start || "")} - {String(permit?.work_end || "")})
+                <strong>Tanggal &amp; Waktu:</strong> {String(permit?.work_date || "")} ({String(permit?.work_start || "")} - {String(permit?.work_end || "")})
                 </p>
                 <p className="mb-1"><strong>Lokasi:</strong> {String(permit?.work_location || "")}</p>
                 <p className="mb-1"><strong>Deskripsi:</strong> {String(permit?.work_description || "")}</p>

@@ -1,15 +1,47 @@
-// src/services/mkServices.ts
 import axios from "axios";
 
+// 1. URL Base Fallback ke Render jika VITE_API_BASE_URL belum ter-inject
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://hse-construction-backend.onrender.com/api";
+
 const publicApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  baseURL: API_BASE_URL,
 });
 
+// 2. Definisi Tipe Detail Permit (Izin Kerja)
+export interface PermitDetail {
+  id?: number;
+  project?: string;
+  permit_type?: string;
+  permit_type_label?: string;
+  document_number?: string;
+  work_date?: string;
+  work_start?: string;
+  work_end?: string;
+  work_location?: string;
+  work_description?: string;
+  equipment_used?: string;
+  person_in_charge?: string;
+  worker_count?: number;
+  risk_category?: string;
+  applicant?: string;
+  approvals?: Array<{
+    step: string;
+    decision: string;
+    remarks?: string;
+    decided_at?: string;
+    decided_by?: string;
+  }>;
+  [key: string]: unknown; // Mengizinkan field tambahan dari JSON backend
+}
+
+// 3. Response Portal Data MK
 export interface MkPortalResponse {
   state: string;
   contact_name: string;
   expires_at: string;
-  permit: Record<string, unknown>;
+  permit: PermitDetail;
 }
 
 export interface OtpDetails {
@@ -23,6 +55,10 @@ export interface OtpDetails {
 export interface OtpResponse {
   otp?: OtpDetails;
 }
+
+// ----------------------------------------------------
+// API Methods
+// ----------------------------------------------------
 
 // 1. Get Portal Data
 export const getMkPortalData = async (token: string): Promise<MkPortalResponse> => {
