@@ -23,6 +23,7 @@ import WorkPermitPrint from "./pages/workPermit/WorkPermitPrint";
 
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MkApprovalPage from "./pages/MkApprovalPage";
 
 function App() {
   return (
@@ -311,6 +312,11 @@ function App() {
           }
         />
       </Routes>
+
+    <Routes>
+      {/* Route publik untuk persetujuan eksternal MK */}
+    <Route path="/mk/:token" element={<MkApprovalPage />} />
+    </Routes>
     </BrowserRouter>
   );
 }
