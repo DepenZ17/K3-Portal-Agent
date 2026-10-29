@@ -40,9 +40,9 @@ export default function MkApprovalPage() {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status;
         const msg = (err.response?.data as { detail?: string })?.detail || err.message;
-        if (status === 404) setErrorMessage("Tautan tidak valid[cite: 3].");
-        else if (status === 410) setErrorMessage("Tautan tidak dapat digunakan: sudah diputuskan, diganti, kedaluwarsa, atau izin kerja telah berpindah tahap[cite: 3].");
-        else if (status === 409) setErrorMessage("Proyek tidak aktif atau HIRA tidak lagi disetujui[cite: 4].");
+        if (status === 404) setErrorMessage("Tautan tidak valid.");
+        else if (status === 410) setErrorMessage("Tautan tidak dapat digunakan: sudah diputuskan, diganti, kedaluwarsa, atau izin kerja telah berpindah tahap.");
+        else if (status === 409) setErrorMessage("Proyek tidak aktif atau HIRA tidak lagi disetujui.");
         else setErrorMessage(msg);
       } else {
         setErrorMessage("Gagal memuat data persetujuan MK.");
@@ -71,14 +71,14 @@ export default function MkApprovalPage() {
     try {
       const res = await sendMkOtp(token);
       setOtpInfo(res.otp || null);
-      setSuccessMessage("Kode OTP berhasil dikirim ke email Anda[cite: 3].");
+      setSuccessMessage("Kode OTP berhasil dikirim ke email Anda.");
       const sec = res.otp?.can_request_in_seconds ?? 60;
       setCountdown(sec);
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status;
         const msg = (err.response?.data as { detail?: string })?.detail || err.message;
-        if (status === 429) setErrorMessage("Terlalu cepat untuk meminta kode baru atau terlalu banyak permintaan[cite: 4].");
+        if (status === 429) setErrorMessage("Terlalu cepat untuk meminta kode baru atau terlalu banyak permintaan.");
         else setErrorMessage(msg);
       } else {
         setErrorMessage("Gagal mengirim OTP.");
@@ -102,7 +102,7 @@ export default function MkApprovalPage() {
       return;
     }
     if (decision === "reject" && !remarks.trim()) {
-      setErrorMessage("Catatan / Alasan wajib diisi saat menolak[cite: 3].");
+      setErrorMessage("Catatan / Alasan wajib diisi saat menolak.");
       return;
     }
 
@@ -122,9 +122,9 @@ export default function MkApprovalPage() {
         const data = err.response?.data as { detail?: string };
         const msg = data?.detail || err.message;
         if (status === 400) {
-          setErrorMessage(msg || "Kode OTP tidak benar[cite: 3].");
+          setErrorMessage(msg || "Kode OTP tidak benar.");
         } else if (status === 410) {
-          setErrorMessage("Tautan sudah tidak berlaku[cite: 3].");
+          setErrorMessage("Tautan sudah tidak berlaku.");
         } else {
           setErrorMessage(msg);
         }
@@ -178,7 +178,7 @@ export default function MkApprovalPage() {
             <div className="alert alert-warning text-center p-4">
               <h5 className="fw-bold">Tautan Ini Tidak Lagi Aktif</h5>
               <p className="mb-0">
-                Status tautan saat ini: <strong>{String(state)}</strong>. Keputusan atau perubahan status telah dicatat pada sistem[cite: 3].
+                Status tautan saat ini: <strong>{String(state)}</strong>. Keputusan atau perubahan status telah dicatat pada sistem.
               </p>
             </div>
           ) : (
@@ -228,7 +228,7 @@ export default function MkApprovalPage() {
                       {countdown > 0 ? `Kirim Ulang (${countdown}s)` : "Kirim Kode OTP"}
                     </button>
                   </div>
-                  <small className="text-muted">Kode OTP akan dikirim ke email terdaftar Anda dan berlaku selama 10 menit[cite: 4].</small>
+                  <small className="text-muted">Kode OTP akan dikirim ke email terdaftar Anda dan berlaku selama 10 menit.</small>
                   {otpInfo && <div className="text-success small mt-1">OTP telah dikirim. Sisa percobaan: {otpInfo.attempts_left ?? '-'}</div>}
                 </div>
 
