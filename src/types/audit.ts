@@ -9,7 +9,8 @@ export type AuditAction =
   | "cancelled"
   | "close_requested"  // Pengajuan tutup izin kerja (sesuai dokumen backend)
   | "closed"           // Tutup resmi izin kerja
-  | "number_set";      // Tidak disebut di dokumen backend, hapus jika ternyata tidak pernah muncul
+  | "number_set"
+  | "photo_added";
 
 export interface AuditEntry {
   id: string | number;

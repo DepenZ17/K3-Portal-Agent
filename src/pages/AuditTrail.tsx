@@ -1,16 +1,155 @@
 // src/pages/AuditTrail.tsx
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { getAuditLogs } from "../services/auditService";
 import type { AuditEntry, AuditAction, AuditQueryParams } from "../types/audit";
 
 // Label tampilan untuk resource_type dari backend (nilai asli tidak diubah)
 const RESOURCE_LABELS: Record<string, string> = {
-  "permits.permit": "Work Permit",
-  "hira.hiradocument": "HIRA Document",
-  "hira.hiragroup": "HIRA Group",
-  "hira.hiraactivity": "HIRA Activity",
-  "projects.project": "Project",
+  "permits.permit": "Izin Kerja",
+  "hira.hiradocument": "Dokumen HIRA",
+  "hira.hiragroup": "Grup Lokasi HIRA",
+  "hira.hiraactivity": "Aktivitas HIRA",
+  "projects.project": "Proyek",
+};
+
+// Halaman yang bisa dibuka dari resource (grup & aktivitas HIRA tidak punya halaman sendiri)
+const RESOURCE_ROUTES: Partial<Record<string, (id: string | number) => string>> = {
+  "hira.hiradocument": (id) => `/hira/${id}`,
+  "permits.permit": (id) => `/work-permit/${id}`,
+};
+
+// Aksi dalam bahasa Indonesia
+const ACTION_LABELS: Record<string, string> = {
+  created: "Membuat",
+  updated: "Mengubah",
+  deleted: "Menghapus",
+  submitted: "Mengajukan",
+  approved: "Menyetujui",
+  rejected: "Menolak",
+  cancelled: "Membatalkan",
+  close_requested: "Mengajukan penutupan",
+  closed: "Menutup",
+  number_set: "Menetapkan nomor",
+  photo_added: "Menambahkan foto",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  subcontractor: "Subkontraktor",
+  supervisor: "Supervisor",
+  hse_officer: "HSE Officer",
+  hse_coordinator: "HSE Coordinator",
+  project_manager: "Project Manager",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  pending_supervisor: "Menunggu Supervisor",
+  pending_officer: "Menunggu HSE Officer",
+  pending_pm: "Menunggu Project Manager",
+  pending_mk: "Menunggu Manajemen Konstruksi",
+  approved: "Disetujui",
+  rejected: "Ditolak",
+  pending_close: "Menunggu Konfirmasi Penutupan",
+  closed: "Ditutup",
+  cancelled: "Dibatalkan",
+};
+
+// Nama kolom data (snapshot) dalam bahasa Indonesia. Kolom yang belum terdaftar ditampilkan dengan nama yang dirapikan.
+const FIELD_LABELS: Record<string, string> = {
+  project: "Proyek",
+  work_package: "Paket Pekerjaan",
+  work_area: "Area Pekerjaan",
+  document_number: "Nomor Dokumen",
+  document_date: "Tanggal Dokumen",
+  status: "Status",
+  submission_round: "Putaran Pengajuan",
+  location_function: "Lokasi / Fungsi Pekerjaan",
+  applicable_regulation: "Regulasi yang Berlaku",
+  order: "Urutan",
+  activity_name: "Nama Aktivitas",
+  activity_type: "Sifat Pekerjaan",
+  potential_hazard: "Potensi Bahaya",
+  risk_impact: "Risiko / Dampak",
+  initial_severity: "Keparahan Awal",
+  initial_likelihood: "Kemungkinan Awal",
+  residual_severity: "Keparahan Sisa",
+  residual_likelihood: "Kemungkinan Sisa",
+  existing_controls: "Pengendalian Awal",
+  control_category: "Kategori Pengendalian",
+  opportunity: "Peluang",
+  permit_type: "Jenis Izin",
+  risk_category: "Kategori Risiko",
+  work_date: "Tanggal Kerja",
+  work_start: "Jam Mulai",
+  work_end: "Jam Selesai",
+  work_location: "Lokasi Kerja",
+  work_description: "Deskripsi Pekerjaan",
+  equipment_used: "Peralatan",
+  person_in_charge: "Penanggung Jawab",
+  worker_count: "Jumlah Pekerja",
+  safety_areas: "Area Keselamatan",
+  checklist: "Checklist Keselamatan",
+  ppe: "APD",
+  ppe_other: "APD Lainnya",
+  post_work_evaluation: "Evaluasi Pasca-Pekerjaan",
+  cancel_reason: "Alasan Pembatalan",
+  created_at: "Dibuat Pada",
+  updated_at: "Diubah Pada",
+  name: "Nama",
+  location: "Lokasi",
+  client_name: "Klien",
+  start_date: "Tanggal Mulai",
+  is_active: "Aktif",
+};
+
+// "work_package" -> "Work Package" (untuk kolom yang belum punya label)
+const humanizeKey = (key: string): string =>
+  key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatSnapshotValue = (key: string, value: unknown): string => {
+  if (value === null || value === undefined || value === "") return "-";
+  if (key === "status" && typeof value === "string") return STATUS_LABELS[value] ?? value;
+  if (typeof value === "boolean") return value ? "Ya" : "Tidak";
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "-";
+    return value.every((v) => typeof v !== "object" || v === null)
+      ? value.join(", ")
+      : JSON.stringify(value);
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+// "Subcontractor One <a@b.com> (subcontractor)" -> { name: "Subcontractor One", role: "Subkontraktor" }
+const parseActor = (label?: string | null): { name: string; role: string } => {
+  if (!label) return { name: "Sistem", role: "" };
+  const match = label.match(/^(.*?)\s*(?:<[^>]*>)?\s*(?:\(([^)]*)\))?\s*$/);
+  const name = match?.[1]?.trim() || label;
+  const roleSlug = match?.[2]?.trim() || "";
+  return { name, role: ROLE_LABELS[roleSlug] ?? roleSlug };
+};
+
+const formatDate = (iso: string): string =>
+  new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+
+// Jam tanpa detik, dengan titik dua (bawaan id-ID memakai titik)
+const formatTime = (iso: string): string =>
+  new Date(iso)
+    .toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false })
+    .replace(".", ":");
+
+// Keterangan waktu relatif; hanya untuk 7 hari terakhir
+const formatRelative = (iso: string): string | null => {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} hari lalu`;
+  return null;
 };
 
 export default function AuditTrail() {
@@ -30,6 +169,12 @@ export default function AuditTrail() {
 
   // State Modal Detail Snapshot
   const [selectedSnapshot, setSelectedSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [showRawJson, setShowRawJson] = useState<boolean>(false);
+
+  const closeSnapshot = () => {
+    setSelectedSnapshot(null);
+    setShowRawJson(false);
+  };
 
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
@@ -178,16 +323,9 @@ export default function AuditTrail() {
                 }}
               >
                 <option value="">Semua Aksi</option>
-                <option value="created">Created</option>
-                <option value="updated">Updated</option>
-                <option value="deleted">Deleted</option>
-                <option value="submitted">Submitted</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="close_requested">Close Requested</option>
-                <option value="closed">Closed</option>
-                <option value="number_set">Number Set</option>
+                {Object.entries(ACTION_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
 
@@ -204,11 +342,9 @@ export default function AuditTrail() {
                 }}
               >
                 <option value="">Semua Resource</option>
-                <option value="permits.permit">Work Permit</option>
-                <option value="hira.hiradocument">HIRA Document</option>
-                <option value="hira.hiragroup">HIRA Group</option>
-                <option value="hira.hiraactivity">HIRA Activity</option>
-                <option value="projects.project">Project</option>
+                {Object.entries(RESOURCE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
 
@@ -262,88 +398,99 @@ export default function AuditTrail() {
             <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead className="table-light border-bottom">
                 <tr className="text-secondary small fw-bold text-uppercase">
-                  <th className="py-3 px-3" style={{ width: "13%" }}>Waktu</th>
-                  <th className="py-3 px-3" style={{ width: "33%" }}>Aktor / User</th>
-                  <th className="py-3 px-3" style={{ width: "13%" }}>Aksi</th>
-                  <th className="py-3 px-3" style={{ width: "17%" }}>Resource</th>
+                  <th className="py-3 px-3" style={{ width: "16%" }}>Waktu</th>
+                  <th className="py-3 px-3" style={{ width: "24%" }}>Pelaku</th>
+                  <th className="py-3 px-3" style={{ width: "36%" }}>Aktivitas</th>
                   <th className="py-3 px-3" style={{ width: "14%" }}>IP Address</th>
-                  <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Snapshot</th>
+                  <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Data</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-5">
+                    <td colSpan={5} className="text-center py-5">
                       <div className="spinner-border text-success spinner-border-sm me-2" role="status"></div>
                       <span className="text-muted small">Memuat data audit log...</span>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-5 text-muted">
+                    <td colSpan={5} className="text-center py-5 text-muted">
                       Tidak ada riwayat aktivitas ditemukan.
                     </td>
                   </tr>
                 ) : (
-                  logs.map((log) => (
-                    <tr key={log.id}>
-                      <td className="px-3 text-nowrap">
-                        <small className="fw-semibold text-dark">
-                          {new Date(log.timestamp).toLocaleDateString("id-ID", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </small>
-                        <br />
-                        <span className="text-muted" style={{ fontSize: "11px" }}>
-                          {new Date(log.timestamp).toLocaleTimeString("id-ID")}
-                        </span>
-                      </td>
+                  logs.map((log) => {
+                    const actor = parseActor(log.actor_label || (log.user != null ? String(log.user) : null));
+                    const relative = formatRelative(log.timestamp);
+                    const resourceLabel = RESOURCE_LABELS[log.resource_type] || log.resource_type;
+                    const routeFor = RESOURCE_ROUTES[log.resource_type];
+                    const canOpen = routeFor && log.action !== "deleted";
 
-                      <td className="px-3">
-                        <div className="fw-semibold text-dark small">{log.actor_label || log.user || "System"}</div>
-                        {log.remarks && (
-                          <span className="text-muted d-block" style={{ fontSize: "11px" }}>
-                            {log.remarks}
+                    return (
+                      <tr key={log.id}>
+                        <td className="px-3" title={new Date(log.timestamp).toLocaleString("id-ID")}>
+                          <small className="fw-semibold text-dark">{formatDate(log.timestamp)}</small>
+                          <br />
+                          <span className="text-muted" style={{ fontSize: "11px" }}>
+                            {formatTime(log.timestamp)}
+                            {relative && ` · ${relative}`}
                           </span>
-                        )}
-                      </td>
+                        </td>
 
-                      <td className="px-3">
-                        <span className={`badge ${getActionBadgeClass(log.action)} text-uppercase rounded-pill px-2 py-1`}>
-                          {log.action}
-                        </span>
-                      </td>
+                        <td className="px-3">
+                          <div className="fw-semibold text-dark small text-truncate">{actor.name}</div>
+                          {actor.role && (
+                            <div className="text-muted" style={{ fontSize: "11px" }}>{actor.role}</div>
+                          )}
+                          {log.remarks && (
+                            <span className="text-muted d-block fst-italic" style={{ fontSize: "11px" }}>
+                              {log.remarks}
+                            </span>
+                          )}
+                        </td>
 
-                      <td className="px-3">
-                        <span className="fw-semibold text-dark small">
-                          {RESOURCE_LABELS[log.resource_type] || log.resource_type}
-                        </span>
-                        <span className="text-muted ms-1 small">#{log.resource_id}</span>
-                      </td>
+                        <td className="px-3">
+                          <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1 me-2`}>
+                            {ACTION_LABELS[log.action] || log.action}
+                          </span>
+                          {canOpen ? (
+                            <Link
+                              to={routeFor(log.resource_id)}
+                              className="fw-semibold small text-decoration-none"
+                              title="Buka dokumen"
+                            >
+                              {resourceLabel} #{log.resource_id}
+                            </Link>
+                          ) : (
+                            <span className="fw-semibold text-dark small">
+                              {resourceLabel} #{log.resource_id}
+                            </span>
+                          )}
+                        </td>
 
-                      <td className="px-3 text-nowrap">
-                        <code className="text-dark bg-light px-2 py-1 rounded small">
-                          {log.ip_address || "-"}
-                        </code>
-                      </td>
+                        <td className="px-3 text-nowrap">
+                          <code className="text-dark bg-light px-2 py-1 rounded small">
+                            {log.ip_address || "-"}
+                          </code>
+                        </td>
 
-                      <td className="px-3 text-center">
-                        {log.snapshot ? (
-                          <button
-                            className="btn btn-sm btn-outline-secondary px-3"
-                            onClick={() => setSelectedSnapshot(log.snapshot)}
-                            title="Lihat Detail Snapshot"
-                          >
-                            <i className="bi bi-file-code"></i> Detail
-                          </button>
-                        ) : (
-                          <span className="text-muted small">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        <td className="px-3 text-center">
+                          {log.snapshot ? (
+                            <button
+                              className="btn btn-sm btn-outline-secondary px-3"
+                              onClick={() => setSelectedSnapshot(log.snapshot)}
+                              title="Lihat isi data saat aktivitas ini terjadi"
+                            >
+                              <i className="bi bi-file-code"></i> Detail
+                            </button>
+                          ) : (
+                            <span className="text-muted small">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -382,30 +529,46 @@ export default function AuditTrail() {
         )}
       </div>
 
-      {/* Modal Detail Snapshot */}
+      {/* Modal Detail Data (Snapshot) */}
       {selectedSnapshot && (
         <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow">
               <div className="modal-header border-bottom py-3">
-                <h5 className="modal-title h6 fw-bold">Detail Snapshot Payload</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setSelectedSnapshot(null)}
-                ></button>
+                <h5 className="modal-title h6 fw-bold">Isi Data Saat Aktivitas Terjadi</h5>
+                <button type="button" className="btn-close" onClick={closeSnapshot}></button>
               </div>
               <div className="modal-body p-3">
-                <pre className="bg-dark text-light p-3 rounded fs-6 mb-0" style={{ maxHeight: "400px", overflowY: "auto" }}>
-                  {JSON.stringify(selectedSnapshot, null, 2)}
-                </pre>
-              </div>
-              <div className="modal-footer border-top py-2">
+                <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                  <table className="table table-sm table-striped align-middle mb-0">
+                    <tbody>
+                      {Object.entries(selectedSnapshot).map(([key, value]) => (
+                        <tr key={key}>
+                          <td className="fw-semibold small text-secondary" style={{ width: "35%" }}>
+                            {FIELD_LABELS[key] || humanizeKey(key)}
+                          </td>
+                          <td className="small text-break">{formatSnapshotValue(key, value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setSelectedSnapshot(null)}
+                  className="btn btn-link btn-sm text-decoration-none px-0 mt-2"
+                  onClick={() => setShowRawJson((v) => !v)}
                 >
+                  {showRawJson ? "Sembunyikan data teknis" : "Lihat data teknis (JSON)"}
+                </button>
+                {showRawJson && (
+                  <pre className="bg-dark text-light p-3 rounded mb-0 small" style={{ maxHeight: "300px", overflowY: "auto" }}>
+                    {JSON.stringify(selectedSnapshot, null, 2)}
+                  </pre>
+                )}
+              </div>
+              <div className="modal-footer border-top py-2">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={closeSnapshot}>
                   Tutup
                 </button>
               </div>

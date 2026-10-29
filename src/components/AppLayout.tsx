@@ -17,7 +17,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     if (accessToken) {
-      registerAndSubscribePush(DUMMY_VAPID_PUBLIC_KEY, accessToken);
+      registerAndSubscribePush(DUMMY_VAPID_PUBLIC_KEY);
     }
   }, [accessToken]);
 

@@ -12,7 +12,9 @@ import {
   confirmCloseWorkPermit, 
   setWorkPermitNumber,
   uploadWorkPermitPhotos,
-  deleteWorkPermitPhoto
+  deleteWorkPermitPhoto,
+  deleteWorkPermitAttachment,
+  resendMkLink // <-- Ditambahkan untuk kirim ulang tautan MK
 } from "../../services/workPermitServices";
 import type {
   WorkPermitDetail,
@@ -20,6 +22,7 @@ import type {
   RiskCategory,
   GpsLocationData,
   PermitPhoto,
+  PermitAttachment,
 } from "../../types/workPermit";
 
 // Cek allowed_actions (mendukung bentuk objek maupun array)
@@ -44,7 +47,7 @@ const extractErrorMessage = (err: unknown, fallback: string): string => {
       if (msg) return `${firstKey}: ${msg}`;
     }
     if (err.response?.status === 503) {
-      return "Penyimpanan foto sedang tidak dapat dijangkau. Silakan coba lagi.";
+      return "Penyimpanan file sedang tidak dapat dijangkau. Silakan coba lagi.";
     }
     return fallback;
   }
@@ -67,9 +70,9 @@ export default function WorkPermitDetailComponent() {
   const [cancelReasonInput, setCancelReasonInput] = useState<string>("");
   const [postWorkEvalInput, setPostWorkEvalInput] = useState<string>("");
   const [docNumberInput, setDocNumberInput] = useState<string>("");
-  const [afterPhotoFiles, setAfterPhotoFiles] = useState<File[]>([]); // Foto "after" saat request close
-  const [afterInputKey, setAfterInputKey] = useState<number>(0); // Untuk mengosongkan input file
-  const [activeModal, setActiveModal] = useState<string | null>(null); // "approve", "reject", "cancel", "close", "set-number"
+  const [afterPhotoFiles, setAfterPhotoFiles] = useState<File[]>([]);
+  const [afterInputKey, setAfterInputKey] = useState<number>(0);
+  const [activeModal, setActiveModal] = useState<string | null>(null);
 
   const fetchPermitDetail = useCallback(async () => {
     if (!id) return;
@@ -105,7 +108,7 @@ export default function WorkPermitDetailComponent() {
     (permit?.photos ?? []).filter((p) => p.stage === stage).length;
 
   // Helper Badge Risk Category
-  const renderRiskBadge = (category?: RiskCategory | string) => {
+  const renderRiskBadge = (category?: RiskCategory | string | null) => {
     const colorMap: Record<string, { bg: string; color: string }> = {
       R: { bg: "#198754", color: "#fff" },
       M: { bg: "#ffc107", color: "#212529" },
@@ -129,7 +132,7 @@ export default function WorkPermitDetailComponent() {
     );
   };
 
-  // Helper untuk mendapatkan koordinat GPS terkini (selalu pembacaan baru: maximumAge 0)
+  // Helper untuk mendapatkan koordinat GPS terkini
   const getCurrentGpsLocation = (): Promise<GpsLocationData> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -145,7 +148,6 @@ export default function WorkPermitDetailComponent() {
             accuracy: position.coords.accuracy,
             captured_at: new Date(position.timestamp).toISOString(),
           };
-          // Batas akurasi 50 meter adalah aturan frontend, bukan validasi server
           if (gpsPayload.accuracy > 50) {
             reject(new Error(`Akurasi GPS terlalu rendah (${gpsPayload.accuracy.toFixed(1)} meter). Maksimal akurasi 50 meter.`));
           } else {
@@ -158,7 +160,22 @@ export default function WorkPermitDetailComponent() {
     });
   };
 
-  // 1. Action Submit (Creator - wajib GPS + minimal 1 foto before)
+  // Fungsi bantuan untuk memformat tanggal dan waktu secara seragam tanpa koma
+  const formatDateTime = (dateString?: string | null) => {
+  if (!dateString) return "-";
+  const d = new Date(dateString);
+  const datePart = d.toLocaleDateString("id-ID"); // Contoh: 05/11/2026
+  const timePart = d.toLocaleTimeString("id-ID", { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit', 
+    hour12: false 
+  }).replace(/\./g, ':'); // Mengganti titik (.) menjadi titik dua (:)
+  
+  return `${datePart} ${timePart}`;
+  };
+
+  // 1. Action Submit
   const handleSubmitPermit = async () => {
     if (!id) return;
     resetMessages();
@@ -181,14 +198,14 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 2. Action Approve (GPS wajib hanya jika decide_requires_location = true: Supervisor & HSE Officer)
+  // 2. Action Approve
   const handleApprove = async () => {
     if (!id) return;
     resetMessages();
     setActionLoading(true);
     try {
       let gpsPayload: GpsLocationData | undefined;
-      if (isActionAllowed(permit?.allowed_actions, "decide_requires_location")) {
+      if (isActionAllowed(permit?.allowed_actions ?? {}, "decide_requires_location")) {
         gpsPayload = await getCurrentGpsLocation();
       }
 
@@ -208,7 +225,7 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 3. Action Reject (remarks wajib, tanpa lokasi)
+  // 3. Action Reject
   const handleReject = async () => {
     if (!id) return;
     resetMessages();
@@ -252,7 +269,7 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 5. Action Request Close (evaluasi wajib + minimal 1 foto after)
+  // 5. Action Request Close
   const handleRequestClose = async () => {
     if (!id) return;
     resetMessages();
@@ -269,7 +286,7 @@ export default function WorkPermitDetailComponent() {
     try {
       if (afterPhotoFiles.length > 0) {
         const withPhotos = await uploadWorkPermitPhotos(id, "after", afterPhotoFiles);
-        setPermit(withPhotos); // Foto tidak terunggah ulang jika langkah berikutnya gagal dan dicoba lagi
+        setPermit(withPhotos);
         setAfterPhotoFiles([]);
         setAfterInputKey((k) => k + 1);
       }
@@ -323,6 +340,22 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
+  // 8. Handler Resend MK Link (Untuk Permit T & E)
+  const handleResendMkLink = async () => {
+    if (!id) return;
+    resetMessages();
+    setActionLoading(true);
+    try {
+      await resendMkLink(id);
+      setSuccessMessage("Tautan persetujuan MK berhasil dikirim ulang.");
+      await fetchPermitDetail();
+    } catch (err: unknown) {
+      setErrorMessage(extractErrorMessage(err, "Gagal mengirim ulang tautan MK."));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Helper Hapus Foto
   const handleDeletePhoto = async (photoId: string | number) => {
     if (!id || !window.confirm("Apakah Anda yakin ingin menghapus foto ini?")) return;
@@ -333,6 +366,19 @@ export default function WorkPermitDetailComponent() {
       await fetchPermitDetail();
     } catch (err: unknown) {
       setErrorMessage(extractErrorMessage(err, "Gagal menghapus foto."));
+    }
+  };
+
+  // Helper Hapus Lampiran PDF
+  const handleDeleteAttachment = async (attachmentId: string | number) => {
+    if (!id || !window.confirm("Apakah Anda yakin ingin menghapus lampiran ini?")) return;
+    resetMessages();
+    try {
+      await deleteWorkPermitAttachment(id, attachmentId);
+      setSuccessMessage("Lampiran berhasil dihapus.");
+      await fetchPermitDetail();
+    } catch (err: unknown) {
+      setErrorMessage(extractErrorMessage(err, "Gagal menghapus lampiran."));
     }
   };
 
@@ -361,7 +407,6 @@ export default function WorkPermitDetailComponent() {
   const beforePhotos = permit.photos?.filter((p) => p.stage === "before") || [];
   const afterPhotos = permit.photos?.filter((p) => p.stage === "after") || [];
 
-  // Thumbnail foto. url bisa null jika penyimpanan foto sedang bermasalah.
   const renderPhoto = (p: PermitPhoto, canDelete: boolean) => (
     <div key={p.id} className="position-relative">
       {p.url ? (
@@ -397,13 +442,11 @@ export default function WorkPermitDetailComponent() {
   return (
     <div className="container py-4" style={{ maxWidth: "1000px" }}>
       
-      {/* Alert Messages (saat modal terbuka, error tampil di dalam modal) */}
       {errorMessage && !activeModal && <div className="alert alert-danger shadow-sm alert-dismissible fade show">{errorMessage}</div>}
       {successMessage && <div className="alert alert-success shadow-sm alert-dismissible fade show">{successMessage}</div>}
 
       <div className="card shadow border-0 overflow-hidden mb-4">
         
-        {/* Header */}
         <div className="bg-primary text-white p-4 d-flex flex-column-reverse flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
           <div style={{ minWidth: 0 }}>
             <div className="d-flex flex-wrap gap-2 mb-2">
@@ -414,7 +457,7 @@ export default function WorkPermitDetailComponent() {
                 {permit.status.replace("_", " ")}
               </span>
             </div>
-                        <h2 className="fw-bold mb-1 text-white text-break">
+            <h2 className="fw-bold mb-1 text-white text-break">
               Izin Kerja di Ketinggian {permit.document_number ? `(${permit.document_number})` : "(Belum ada No. Dokumen)"}
             </h2>
             <p className="mb-0 text-white-50 small text-break">Proyek: {permit.project_name}</p>
@@ -429,7 +472,6 @@ export default function WorkPermitDetailComponent() {
 
         <div className="card-body p-4 p-md-5">
 
-          {/* Action Toolbar Berdasarkan allowed_actions */}
           <div className="d-flex flex-wrap gap-2 mb-4 p-3 bg-light rounded shadow-sm align-items-center justify-content-between">
             <span className="fw-semibold small text-muted">Aksi Tersedia:</span>
             <div className="d-flex flex-wrap gap-2">
@@ -476,7 +518,73 @@ export default function WorkPermitDetailComponent() {
             </div>
           </div>
 
-          {/* Approval Stepper (Approval Chain) */}
+          {/* Panel Khusus Status Manajemen Konstruksi (MK) untuk Permit T & E */}
+          {permit.status === "pending_mk" && (
+            <div className="card shadow-sm border mb-4 bg-white">
+              <div className="card-body p-4">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h5 className="fw-bold text-dark mb-1">Status Persetujuan Manajemen Konstruksi (MK)</h5>
+                    <p className="text-muted small mb-0">Memantau tautan OTP eksternal yang dikirimkan ke kontak MK.</p>
+                  </div>
+                  {can("can_resend_mk_link") && (
+                    <button
+                      className="btn btn-outline-primary btn-sm"
+                      onClick={handleResendMkLink}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading ? "Memproses..." : "Kirim Ulang Tautan MK"}
+                    </button>
+                  )}
+                </div>
+
+                {permit.mk_requests && permit.mk_requests.length > 0 ? (
+                  <div className="table-responsive">
+                  <table className="table table-sm table-bordered align-middle mb-0">
+                  <thead className="table-light small">
+                  <tr>
+                  <th>Kontak MK</th>
+                  <th>Email (Masked)</th>
+                  <th>Status Tautan</th>
+                  <th>Kedaluwarsa</th>
+                  <th>Status Email</th>
+                  </tr>
+                  </thead>
+                  <tbody className="small">
+                  {permit.mk_requests.map((mk) => (
+                  <tr key={mk.id}>
+                  <td className="fw-semibold">{mk.contact_name}</td>
+                  <td>{mk.contact_email}</td>
+                  <td>
+                  <span className={`badge bg-${mk.state === 'active' ? 'success' : mk.state === 'expired' ? 'danger' : 'secondary'} text-uppercase`}>
+                  {mk.state}
+                  </span>
+                  </td>
+                  {/* Menggunakan fungsi formatDateTime tanpa tanda koma */}
+                  <td>{formatDateTime(mk.expires_at)}</td>
+                  <td>
+                  {mk.email_error ? (
+                  <span className="text-danger" title={mk.email_error}>Gagal Kirim</span>
+                  ) : mk.email_sent ? (
+                  <span className="text-success">
+                Terkirim ({formatDateTime(mk.email_sent_at).split(" ")[1]})
+              </span>
+              ) : (
+              <span className="text-muted">Menunggu</span>
+            )}
+          </td>
+          </tr>
+              ))}
+              </tbody>
+              </table>
+              </div>
+                ) : (
+                  <p className="text-muted small mb-0">Belum ada permintaan MK yang diinisiasi untuk putaran ini.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {permit.approval_chain && permit.approval_chain.length > 0 && (
             <div className="mb-4 p-3 border rounded bg-white shadow-sm">
               <h6 className="fw-bold text-dark mb-3">Alur Persetujuan (Approval Chain)</h6>
@@ -497,18 +605,43 @@ export default function WorkPermitDetailComponent() {
             </div>
           )}
 
-          {/* Informasi Detail Utama */}
           <div className="row g-4 mb-4">
             <div className="col-md-6">
               <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Informasi Aktivitas &amp; Lokasi</h5>
-              <p className="mb-2"><strong>Aktivitas HIRA:</strong> {permit.hira_activity_name} (Kategori: <span className="badge bg-secondary">{permit.hira_initial_category}</span>)</p>
+              
+              <div className="mb-2">
+                <strong>Dokumen HIRA:</strong> {permit.hira?.document ? `[Dok: ${permit.hira.document.document_number || permit.hira.document.id}] Paket: ${permit.hira.document.work_package} (${permit.hira.document.work_area})` : "-"}
+              </div>
+
+              <div className="mb-2">
+                <strong>Aktivitas HIRA Dipilih:</strong>
+                {permit.hira?.groups && permit.hira.groups.length > 0 ? (
+                  <ul className="list-unstyled ps-3 mt-1 small">
+                    {permit.hira.groups.flatMap((g) => g.activities || [])
+                      .filter((act) => act.id && permit.hira_activity_ids.includes(act.id))
+                      .map((act, idx) => (
+                        <li key={act.id || idx} className="mb-1">
+                          &bull; <strong>{act.activity_name}</strong> (Risiko Awal: {act.initial_category || act.initial_score || "-"})
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <span className="text-muted ms-2">-</span>
+                )}
+              </div>
+
+              <div className="mb-2 d-flex align-items-center gap-2">
+                <strong>Kategori Risiko Tertinggi (HIRA):</strong> 
+                {renderRiskBadge(permit.highest_initial_category)}
+              </div>
+
               <div className="mb-2 d-flex align-items-center gap-2">
                 <strong>Kategori Risiko Izin:</strong> 
                 {renderRiskBadge(permit.risk_category)}
               </div>
+
               <p className="mb-2"><strong>Tanggal &amp; Jam Kerja:</strong> {permit.work_date} ({permit.work_start} - {permit.work_end} WIB)</p>
               <p className="mb-2"><strong>Lokasi Kerja:</strong> {permit.work_location}</p>
-
               <p className="mb-2"><strong>Jumlah Pekerja:</strong> {permit.worker_count} Orang</p>
               <p className="mb-2"><strong>Penanggung Jawab (PIC):</strong> {permit.person_in_charge}</p>
               <p className="mb-2"><strong>Peralatan Digunakan:</strong> {permit.equipment_used || "-"}</p>
@@ -530,7 +663,6 @@ export default function WorkPermitDetailComponent() {
             </div>
           </div>
 
-          {/* Stempel GPS (geo_stamps). Server menyimpan lokasi apa adanya tanpa verifikasi, reviewer yang memeriksa. */}
           <div className="mb-4">
             <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Stempel Geolokasi GPS (Geo Stamps)</h5>
             {permit.geo_stamps && permit.geo_stamps.length > 0 ? (
@@ -546,7 +678,6 @@ export default function WorkPermitDetailComponent() {
                   </thead>
                   <tbody>
                     {permit.geo_stamps.map((stamp) => {
-                      // Backend bisa mengirim angka sebagai string (Decimal)
                       const lat = Number(stamp.latitude);
                       const lng = Number(stamp.longitude);
                       return (
@@ -575,7 +706,44 @@ export default function WorkPermitDetailComponent() {
             )}
           </div>
 
-          {/* Galeri Foto Bukti (Before & After) */}
+          {/* Lampiran Dokumen PDF (Medical & Certificate) */}
+          <div className="mb-4">
+            <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Lampiran Dokumen PDF (Medical &amp; Certificate)</h5>
+            {permit.attachments && permit.attachments.length > 0 ? (
+              <div className="list-group">
+                {permit.attachments.map((att: PermitAttachment) => (
+                  <div key={att.id} className="list-group-item d-flex justify-content-between align-items-center py-2">
+                    <div>
+                      <span className={`badge bg-${att.kind === 'medical' ? 'info' : 'secondary'} me-2 text-uppercase`}>
+                        {att.kind}
+                      </span>
+                      {att.url ? (
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-decoration-none fw-semibold">
+                          {att.original_name}
+                        </a>
+                      ) : (
+                        <span>{att.original_name} (File tidak tersedia)</span>
+                      )}
+                      <small className="text-muted ms-2">({(att.size / 1024).toFixed(1)} KB)</small>
+                    </div>
+                    {can("can_edit") && (
+                      <button
+                        className="btn btn-outline-danger btn-sm py-0 px-2"
+                        style={{ fontSize: "12px" }}
+                        onClick={() => handleDeleteAttachment(att.id)}
+                        title="Hapus Lampiran"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted small">Belum ada lampiran dokumen PDF yang diunggah.</p>
+            )}
+          </div>
+
           <div className="mb-4">
             <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Foto Bukti Lapangan</h5>
             
@@ -598,7 +766,6 @@ export default function WorkPermitDetailComponent() {
             )}
           </div>
 
-          {/* Area Keselamatan & APD */}
           <div className="row g-4 mb-4">
             <div className="col-md-6">
               <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Area Keselamatan (Safety Areas)</h5>
@@ -623,7 +790,6 @@ export default function WorkPermitDetailComponent() {
             </div>
           </div>
 
-          {/* Riwayat Persetujuan */}
           {permit.approvals && permit.approvals.length > 0 && (
             <div className="mb-4">
               <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Riwayat Keputusan (Approval History)</h5>
@@ -647,9 +813,9 @@ export default function WorkPermitDetailComponent() {
                             {app.decision}
                           </span>
                         </td>
-                        <td>{app.decided_by?.full_name || app.decided_by_name || "-"}</td>
+                        <td>{app.decided_by?.full_name || "-"}</td>
                         <td>{app.remarks || "-"}</td>
-                        <td className="small text-muted">{app.decided_at ? new Date(app.decided_at).toLocaleString() : "-"}</td>
+                        <td className="small text-muted">{app.decided_at ? formatDateTime(app.decided_at) : "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -661,7 +827,6 @@ export default function WorkPermitDetailComponent() {
         </div>
       </div>
 
-      {/* MODALS UNTUK AKSI */}
       {activeModal && (
         <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog">
@@ -717,7 +882,7 @@ export default function WorkPermitDetailComponent() {
                         onChange={(e) => setAfterPhotoFiles(Array.from(e.target.files || []))}
                       />
                       <small className="text-muted d-block mt-1">
-                        Minimal satu foto. Format JPEG, PNG, WebP (maksimal 5 MB per file, maksimal 5 foto).
+                        Minimal satu foto. Format JPG/JPEG, PNG, WebP (maksimal 5 MB per file, maksimal 5 foto).
                         {afterPhotos.length > 0 && ` Sudah terunggah: ${afterPhotos.length} foto.`}
                       </small>
                     </div>

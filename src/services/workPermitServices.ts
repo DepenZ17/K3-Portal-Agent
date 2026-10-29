@@ -163,3 +163,46 @@ export const uploadWorkPermitPhotos = async (
 export const deleteWorkPermitPhoto = async (id: string | number, photoId: string | number): Promise<void> => {
   await api.delete(`${BASE_URL}/${id}/photos/${photoId}/`);
 };
+
+// ==========================================
+// ATTACHMENTS (PDF) ENDPOINTS (/permits/{id}/attachments/)
+// ==========================================
+
+// Upload lampiran PDF wajib (kind: "medical" atau "certificate", maks 3 MB per file)
+export const uploadWorkPermitAttachments = async (
+  id: string | number,
+  kind: "medical" | "certificate",
+  files: File[]
+): Promise<WorkPermitDetail> => {
+  const formData = new FormData();
+  formData.append("kind", kind);
+
+  files.forEach((file) => {
+    formData.append("files", file);
+  });
+
+  const response = await api.post(`${BASE_URL}/${id}/attachments/`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+// Hapus lampiran PDF tertentu berdasarkan ID attachment
+export const deleteWorkPermitAttachment = async (
+  id: string | number,
+  attachmentId: string | number
+): Promise<void> => {
+  await api.delete(`${BASE_URL}/${id}/attachments/${attachmentId}/`);
+};
+
+// ==========================================
+// MK RESEND LINK ENDPOINT (/permits/{id}/mk-resend/)
+// ==========================================
+
+// Kirim ulang tautan persetujuan MK (Manajemen Konstruksi) saat status pending_mk
+export const resendMkLink = async (id: string | number): Promise<WorkPermitDetail> => {
+  const response = await api.post(`${BASE_URL}/${id}/mk-resend/`);
+  return response.data;
+};

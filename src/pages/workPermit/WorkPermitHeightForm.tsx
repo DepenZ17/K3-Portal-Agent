@@ -9,7 +9,8 @@ import {
   getWorkPermitById, 
   getWorkPermitFormSchema, 
   submitWorkPermit,
-  uploadWorkPermitPhotos
+  uploadWorkPermitPhotos,
+  uploadWorkPermitAttachments
 } from "../../services/workPermitServices";
 import type {
   HeightChecklist,
@@ -17,6 +18,8 @@ import type {
   WorkPermitDetail,
   GpsLocationData,
   PermitPhoto,
+  PermitHiraGroup,
+  PermitAttachment,
 } from "../../types/workPermit";
 
 interface ProjectOption {
@@ -24,26 +27,14 @@ interface ProjectOption {
   name: string;
 }
 
-interface HiraActivity {
-  id: number;
-  activity_name: string;
-  initial_category: string;
-}
-
-interface HiraGroup {
-  id: number;
-  location_function: string;
-  activities: HiraActivity[];
-}
-
 interface HiraDocumentOption {
   id: number;
-  document_number?: string;
-  title?: string;
+  document_number?: string | null;
+  work_package: string;
+  work_area: string;
   project: number;
-  project_name: string;
   status: string;
-  groups?: HiraGroup[];
+  groups?: PermitHiraGroup[];
 }
 
 export default function WorkPermitHeightForm() {
@@ -51,24 +42,29 @@ export default function WorkPermitHeightForm() {
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
 
-  // ID draft yang sudah tersimpan saat mode create (mencegah draft ganda & foto terunggah dua kali)
   const [draftId, setDraftId] = useState<number | null>(null);
 
   // Form Field States
   const [projectId, setProjectId] = useState<number | "">("");
-  const [hiraActivityId, setHiraActivityId] = useState<number | "">("");
+  const [hiraDocumentId, setHiraDocumentId] = useState<number | "">("");
+  const [selectedActivityIds, setSelectedActivityIds] = useState<number[]>([]);
   const [workDate, setWorkDate] = useState<string>("");
   const [workStart, setWorkStart] = useState<string>("08:00");
   const [workEnd, setWorkEnd] = useState<string>("16:00");
   const [workLocation, setWorkLocation] = useState<string>("");
   
-  // GPS Granular State (untuk validasi akurasi max 50 meter)
+  // GPS Granular State
   const [gpsData, setGpsData] = useState<GpsLocationData | null>(null);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
   
-  const [photoFile, setPhotoFile] = useState<File | null>(null); // File foto sebelum kerja (before)
-  const [photoInputKey, setPhotoInputKey] = useState<number>(0); // Untuk mengosongkan input file setelah upload
-  const [existingPhotos, setExistingPhotos] = useState<PermitPhoto[]>([]); // Foto yang sudah diunggah sebelumnya
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState<number>(0);
+  const [existingPhotos, setExistingPhotos] = useState<PermitPhoto[]>([]);
+
+  // PDF Attachment States
+  const [medicalFile, setMedicalFile] = useState<File | null>(null);
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [existingAttachments, setExistingAttachments] = useState<PermitAttachment[]>([]);
   
   const [workDescription, setWorkDescription] = useState<string>("");
   const [equipmentUsed, setEquipmentUsed] = useState<string>("");
@@ -97,7 +93,6 @@ export default function WorkPermitHeightForm() {
   const [fetchingData, setFetchingData] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Deskripsi 14 Checklist
   const checklistDescriptions: Record<string, string> = {
     "1": "SPK/kontrak ditandatangani",
     "2": "Penanggung jawab ditentukan",
@@ -115,7 +110,6 @@ export default function WorkPermitHeightForm() {
     "14": "Bahan kimia B3 aman, ada MSDS & label jelas",
   };
 
-  // Handler Ambil Lokasi GPS Granular (Enforcement Akurasi Maksimal 50 Meter)
   const handleGetGps = () => {
     if (!navigator.geolocation) {
       alert("Geolocation tidak didukung oleh browser Anda.");
@@ -127,7 +121,7 @@ export default function WorkPermitHeightForm() {
         const newGps: GpsLocationData = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy, // dalam meter
+          accuracy: position.coords.accuracy,
           captured_at: new Date(position.timestamp).toISOString(),
         };
         setGpsData(newGps);
@@ -137,11 +131,10 @@ export default function WorkPermitHeightForm() {
         alert("Gagal mendeteksi lokasi GPS. Pastikan izin lokasi diaktifkan.");
         setGpsLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } // maximumAge: 0 memaksa fresh reading
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
-  // Fetch Form Schema & Projects on Mount
   useEffect(() => {
     const initForm = async () => {
       setFetchingData(true);
@@ -149,7 +142,6 @@ export default function WorkPermitHeightForm() {
         const schemaRes = await getWorkPermitFormSchema("working_at_height");
         const schemaData = schemaRes?.data || schemaRes;
 
-        // Fallback dipakai juga jika schema kosong (service mengembalikan array kosong saat gagal)
         const areasArray = schemaData?.safety_areas
           ? Object.entries(schemaData.safety_areas).map(([code, name]) => ({
               code,
@@ -190,7 +182,8 @@ export default function WorkPermitHeightForm() {
         if (isEditMode && id) {
           const detail = await getWorkPermitById(id);
           setProjectId(detail.project);
-          setHiraActivityId(detail.hira_activity);
+          setHiraDocumentId(detail.hira_document || "");
+          setSelectedActivityIds(detail.hira_activity_ids || []);
           setWorkDate(detail.work_date);
           setWorkStart(detail.work_start);
           setWorkEnd(detail.work_end);
@@ -198,6 +191,9 @@ export default function WorkPermitHeightForm() {
           
           if (detail.photos) {
             setExistingPhotos(detail.photos);
+          }
+          if (detail.attachments) {
+            setExistingAttachments(detail.attachments);
           }
 
           setWorkDescription(detail.work_description);
@@ -256,12 +252,33 @@ export default function WorkPermitHeightForm() {
   const handleProjectChange = (selectedProjId: string) => {
     const numId = selectedProjId ? Number(selectedProjId) : "";
     setProjectId(numId);
-    setHiraActivityId("");
+    setHiraDocumentId("");
+    setSelectedActivityIds([]);
     setAvailableHiraDocs([]);
 
     if (numId) {
       fetchHiraDocuments(numId);
     }
+  };
+
+  const handleHiraDocumentChange = (docId: string) => {
+    const numId = docId ? Number(docId) : "";
+    setHiraDocumentId(numId);
+    setSelectedActivityIds([]);
+  };
+
+  const handleActivityToggle = (actId: number) => {
+    setSelectedActivityIds((prev) => {
+      if (prev.includes(actId)) {
+        return prev.filter((id) => id !== actId);
+      } else {
+        if (prev.length >= 10) {
+          alert("Maksimal 10 aktivitas HIRA yang dapat dipilih.");
+          return prev;
+        }
+        return [...prev, actId];
+      }
+    });
   };
 
   const handleChecklistToggle = (key: string) => {
@@ -290,18 +307,24 @@ export default function WorkPermitHeightForm() {
     }
   };
 
+  const selectedHiraDoc = availableHiraDocs.find((doc) => doc.id === hiraDocumentId);
+
   const handleSubmit = async (shouldSubmit: boolean = false) => {
     setLoading(true);
     setErrorMessage("");
 
-    if (!projectId || !hiraActivityId || !workDate || !workLocation || !workDescription || !personInCharge) {
+    if (!projectId || !workDate || !workLocation || !workDescription || !personInCharge) {
       setErrorMessage("Mohon lengkapi semua field wajib yang bertanda bintang (*).");
       setLoading(false);
       return;
     }
 
-    // Validasi wajib GPS dan Akurasi Maksimal 50 Meter saat hendak Submit
     if (shouldSubmit) {
+      if (!hiraDocumentId || selectedActivityIds.length === 0) {
+        setErrorMessage("Dokumen HIRA dan minimal satu aktivitas HIRA wajib dipilih untuk melakukan submit.");
+        setLoading(false);
+        return;
+      }
       if (!gpsData) {
         setErrorMessage("Data GPS wajib diambil untuk melakukan submit izin kerja.");
         setLoading(false);
@@ -319,11 +342,11 @@ export default function WorkPermitHeightForm() {
       }
     }
 
-    // Body create/update: JSON tanpa foto dan tanpa GPS
     const payload: WorkPermitPayload = {
       project: Number(projectId),
-      hira_activity: Number(hiraActivityId),
       permit_type: "working_at_height",
+      hira_document: hiraDocumentId ? Number(hiraDocumentId) : null,
+      hira_activity_ids: selectedActivityIds,
       work_date: workDate,
       work_start: workStart,
       work_end: workEnd,
@@ -346,10 +369,9 @@ export default function WorkPermitHeightForm() {
         savedPermit = await updateWorkPermit(targetId, payload);
       } else {
         savedPermit = await createWorkPermit(payload);
-        setDraftId(savedPermit.id); // Klik berikutnya memperbarui draft ini, bukan membuat baru
+        setDraftId(savedPermit.id);
       }
 
-      // Unggah foto "before" jika ada file baru yang dipilih
       if (photoFile) {
         const withPhotos = await uploadWorkPermitPhotos(savedPermit.id, "before", [photoFile]);
         setExistingPhotos(withPhotos.photos ?? []);
@@ -357,8 +379,16 @@ export default function WorkPermitHeightForm() {
         setPhotoInputKey((k) => k + 1);
       }
 
+      if (medicalFile) {
+        await uploadWorkPermitAttachments(savedPermit.id, "medical", [medicalFile]);
+        setMedicalFile(null);
+      }
+      if (certificateFile) {
+        await uploadWorkPermitAttachments(savedPermit.id, "certificate", [certificateFile]);
+        setCertificateFile(null);
+      }
+
       if (shouldSubmit && gpsData) {
-        // GpsLocationData sama dengan SubmitPermitPayload
         await submitWorkPermit(savedPermit.id, gpsData);
       }
 
@@ -397,12 +427,10 @@ export default function WorkPermitHeightForm() {
   return (
     <div className="container py-4" style={{ maxWidth: "900px" }}>
       
-      {/* Error Alert */}
       {errorMessage && <div className="alert alert-danger shadow-sm">{errorMessage}</div>}
 
       <div className="card shadow border-0 overflow-hidden">
         
-        {/* Header Berwarna */}
         <div className="bg-primary text-white p-4 d-flex justify-content-between align-items-center">
           <div>
             <span className="badge bg-light text-primary fw-bold mb-2">MODUL K3 BERISIKO TINGGI</span>
@@ -420,7 +448,7 @@ export default function WorkPermitHeightForm() {
           
           {/* 1. Project & HIRA Selection */}
           <div className="mb-4 p-3 bg-light rounded border-start border-primary border-4">
-            <h5 className="fw-bold text-dark mb-3">1. Referensi Proyek &amp; Aktivitas HIRA</h5>
+            <h5 className="fw-bold text-dark mb-3">1. Referensi Proyek &amp; Dokumen HIRA</h5>
             
             <div className="mb-3">
               <label className="form-label fw-semibold small">Pilih Proyek*:</label>
@@ -439,29 +467,54 @@ export default function WorkPermitHeightForm() {
               </select>
             </div>
 
-            <div className="mb-2">
-              <label className="form-label fw-semibold small">Pilih Aktivitas HIRA (Disetujui)*:</label>
+            <div className="mb-3">
+              <label className="form-label fw-semibold small">Pilih Dokumen HIRA (Disetujui)*:</label>
               <select
                 className="form-select"
-                value={hiraActivityId}
-                onChange={(e) => setHiraActivityId(Number(e.target.value))}
-                disabled={isEditMode || !projectId}
+                value={hiraDocumentId}
+                onChange={(e) => handleHiraDocumentChange(e.target.value)}
+                disabled={!projectId}
               >
-                <option value="">-- Pilih Aktivitas HIRA --</option>
-                {availableHiraDocs.map((doc) => 
-                  doc.groups?.map((group) => 
-                    group.activities?.map((act) => (
-                      <option key={act.id} value={act.id}>
-                        [Dok: {doc.document_number || doc.id}] [{group.location_function}] {act.activity_name} (Risiko: {act.initial_category})
-                      </option>
-                    ))
-                  )
-                )}
+                <option value="">-- Pilih Dokumen HIRA --</option>
+                {availableHiraDocs.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    [Dok: {doc.document_number || doc.id}] - Paket: {doc.work_package} ({doc.work_area})
+                  </option>
+                ))}
               </select>
               <small className="text-muted">
-                {!projectId ? "Silakan pilih proyek terlebih dahulu." : "Hanya menampilkan HIRA berstatus approved pada proyek ini."}
+                {!projectId ? "Silakan pilih proyek terlebih dahulu." : "Hanya menampilkan dokumen HIRA berstatus approved."}
               </small>
             </div>
+
+            {selectedHiraDoc && selectedHiraDoc.groups && selectedHiraDoc.groups.length > 0 && (
+              <div className="mt-3 p-3 bg-white rounded border">
+                <label className="form-label fw-semibold text-primary mb-2">Pilih Aktivitas HIRA (Minimal 1, Maksimal 10)*:</label>
+                {selectedHiraDoc.groups.map((group, gIndex) => (
+                  <div key={group.id || gIndex} className="mb-3">
+                    <div className="fw-bold text-dark small bg-light p-2 rounded mb-2">
+                      Grup: {group.location_function}
+                    </div>
+                    <div className="d-flex flex-column gap-2 ps-2">
+                      {group.activities?.map((act) => (
+                        <div className="form-check" key={act.id}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id={`hira-act-${act.id}`}
+                            checked={act.id !== undefined && selectedActivityIds.includes(act.id)}
+                            onChange={() => act.id !== undefined && handleActivityToggle(act.id)}
+                          />
+                          <label className="form-check-label small" htmlFor={`hira-act-${act.id}`}>
+                            <strong>{act.activity_name}</strong> — Hazard: {act.potential_hazard} (Kategori Risiko: {act.initial_category || act.initial_score || 'N/A'})
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <hr className="my-4 text-muted" />
@@ -561,9 +614,42 @@ export default function WorkPermitHeightForm() {
                 onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
               />
               <small className="text-muted" style={{ fontSize: "11px" }}>
-                Wajib dilampirkan sebelum melakukan submit (JPEG, PNG, atau WebP, maksimal 5 MB).
+                Wajib dilampirkan sebelum melakukan submit (JPG/JPEG, PNG, WebP maksimal 5 MB).
                 {existingPhotos.filter((p) => p.stage === "before").length > 0 &&
                   ` Sudah terunggah: ${existingPhotos.filter((p) => p.stage === "before").length} foto.`}
+              </small>
+            </div>
+          </div>
+
+          {/* Lampiran Dokumen PDF Wajib (Medical & Certificate) */}
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Dokumen Medis / MCU (PDF):</label>
+              <input
+                type="file"
+                className="form-control"
+                accept="application/pdf"
+                onChange={(e) => setMedicalFile(e.target.files?.[0] || null)}
+              />
+              <small className="text-muted" style={{ fontSize: "11px" }}>
+                Maksimal 10 file dengan ukuran 3 MB per file. 
+                {existingAttachments.filter(a => a.kind === "medical").length > 0 && 
+                  ` Sudah terunggah (${existingAttachments.filter(a => a.kind === "medical").length} file).`}
+              </small>
+            </div>
+
+            <div className="col-md-6">
+              <label className="form-label fw-semibold small">Sertifikat Kompetensi / Pelatihan (PDF):</label>
+              <input
+                type="file"
+                className="form-control"
+                accept="application/pdf"
+                onChange={(e) => setCertificateFile(e.target.files?.[0] || null)}
+              />
+              <small className="text-muted" style={{ fontSize: "11px" }}>
+                Maksimal 10 file dengan ukuran 3 MB per file. 
+                {existingAttachments.filter(a => a.kind === "certificate").length > 0 && 
+                  ` Sudah terunggah (${existingAttachments.filter(a => a.kind === "certificate").length} file).`}
               </small>
             </div>
           </div>
@@ -628,7 +714,7 @@ export default function WorkPermitHeightForm() {
 
           {/* 4. 14 Checklist Keselamatan */}
           <h5 className="fw-bold text-dark mb-2">4. Checklist Keselamatan Kerja di Ketinggian*</h5>
-          <p className="small text-muted mb-3">Semua item checklist wajib dijawab untuk melakukan *submit* izin kerja.</p>
+          <p className="small text-muted mb-3">Semua item checklist wajib dijawab untuk melakukan submit izin kerja.</p>
           <div className="table-responsive mb-4 shadow-sm rounded">
             <table className="table table-bordered table-striped align-middle mb-0">
               <thead className="table-primary text-dark">

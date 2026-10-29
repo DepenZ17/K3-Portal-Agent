@@ -97,7 +97,8 @@ export default function WorkPermitList() {
   };
 
   // Helper Badge Risk Category
-  const renderRiskBadge = (category?: RiskCategory | string) => {
+  // Menjadi seperti ini:
+  const renderRiskBadge = (category?: RiskCategory | string | null) => {
     const colorMap: Record<string, { bg: string; color: string }> = {
       R: { bg: "#198754", color: "#fff" },
       M: { bg: "#ffc107", color: "#212529" },
@@ -233,7 +234,7 @@ export default function WorkPermitList() {
                         <div className="text-muted text-truncate">{item.work_description}</div>
                       )}
                     </td>
-                    <td className="text-center">{renderRiskBadge(item.risk_category)}</td>
+                    <td className="text-center">{renderRiskBadge(item.highest_initial_category || item.risk_category)}</td>
                     <td className="text-nowrap">{formatDate(item.work_date)}</td>
                     <td>{renderStatusBadge(item.status)}</td>
                     <td className="text-center pe-4">
