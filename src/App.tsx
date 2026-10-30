@@ -311,12 +311,11 @@ function App() {
             </ProtectedRoute>
           }
         />
-      </Routes>
 
-    <Routes>
-      {/* Route publik untuk persetujuan eksternal MK */}
-    <Route path="/mk/:token" element={<MkApprovalPage />} />
-    </Routes>
+        {/* Route publik untuk persetujuan eksternal MK */}
+    <Route path="/mk/:token" element={<MkApprovalPage />} />  
+
+      </Routes>
     </BrowserRouter>
   );
 }
