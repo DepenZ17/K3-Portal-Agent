@@ -27,6 +27,17 @@ export default function MkApprovalPage() {
   const [otpInfo, setOtpInfo] = useState<OtpDetails | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
 
+  const formatDate = (date?: string | null): string => {
+  if (!date) return "-";
+
+  const datePart = date.split("T")[0];
+  const [year, month, day] = datePart.split("-");
+
+  if (!year || !month || !day) return date;
+
+  return `${day}/${month}/${year.slice(-2)}`;
+  };
+
   const fetchPortal = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -187,7 +198,7 @@ export default function MkApprovalPage() {
                 <h5 className="fw-bold text-dark mb-3">Detail Ringkas Pekerjaan</h5>
                 <p className="mb-1"><strong>Proyek:</strong> {String(permit?.project || "-")}</p>
                 <p className="mb-1">
-                <strong>Tanggal &amp; Waktu:</strong> {String(permit?.work_date || "")} ({String(permit?.work_start || "")} - {String(permit?.work_end || "")})
+                <strong>Tanggal &amp; Waktu:</strong> {formatDate(permit?.work_date)} ({String(permit?.work_start || "")} - {String(permit?.work_end || "")})
                 </p>
                 <p className="mb-1"><strong>Lokasi:</strong> {String(permit?.work_location || "")}</p>
                 <p className="mb-1"><strong>Deskripsi:</strong> {String(permit?.work_description || "")}</p>
