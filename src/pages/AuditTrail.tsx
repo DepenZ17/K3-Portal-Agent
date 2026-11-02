@@ -2,37 +2,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { getAuditLogs } from "../services/auditService";
+import { getAuditLogs, getAuditLogDetail } from "../services/auditService";
 import type { AuditEntry, AuditAction, AuditQueryParams } from "../types/audit";
 
-// Label tampilan untuk resource_type dari backend (nilai asli tidak diubah)
-const RESOURCE_LABELS: Record<string, string> = {
-  "permits.permit": "Izin Kerja",
-  "hira.hiradocument": "Dokumen HIRA",
-  "hira.hiragroup": "Grup Lokasi HIRA",
-  "hira.hiraactivity": "Aktivitas HIRA",
-  "projects.project": "Proyek",
-};
+interface AuditTrailProps {
+  resourceType?: string;
+  resourceId?: string | number;
+}
 
-// Halaman yang bisa dibuka dari resource (grup & aktivitas HIRA tidak punya halaman sendiri)
 const RESOURCE_ROUTES: Partial<Record<string, (id: string | number) => string>> = {
   "hira.hiradocument": (id) => `/hira/${id}`,
   "permits.permit": (id) => `/work-permit/${id}`,
-};
-
-// Aksi dalam bahasa Indonesia
-const ACTION_LABELS: Record<string, string> = {
-  created: "Membuat",
-  updated: "Mengubah",
-  deleted: "Menghapus",
-  submitted: "Mengajukan",
-  approved: "Menyetujui",
-  rejected: "Menolak",
-  cancelled: "Membatalkan",
-  close_requested: "Mengajukan penutupan",
-  closed: "Menutup",
-  number_set: "Menetapkan nomor",
-  photo_added: "Menambahkan foto",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -56,7 +36,6 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Dibatalkan",
 };
 
-// Nama kolom data (snapshot) dalam bahasa Indonesia. Kolom yang belum terdaftar ditampilkan dengan nama yang dirapikan.
 const FIELD_LABELS: Record<string, string> = {
   project: "Proyek",
   work_package: "Paket Pekerjaan",
@@ -104,7 +83,6 @@ const FIELD_LABELS: Record<string, string> = {
   is_active: "Aktif",
 };
 
-// "work_package" -> "Work Package" (untuk kolom yang belum punya label)
 const humanizeKey = (key: string): string =>
   key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -122,25 +100,27 @@ const formatSnapshotValue = (key: string, value: unknown): string => {
   return String(value);
 };
 
-// "Subcontractor One <a@b.com> (subcontractor)" -> { name: "Subcontractor One", role: "Subkontraktor" }
-const parseActor = (label?: string | null): { name: string; role: string } => {
-  if (!label) return { name: "Sistem", role: "" };
-  const match = label.match(/^(.*?)\s*(?:<[^>]*>)?\s*(?:\(([^)]*)\))?\s*$/);
-  const name = match?.[1]?.trim() || label;
-  const roleSlug = match?.[2]?.trim() || "";
-  return { name, role: ROLE_LABELS[roleSlug] ?? roleSlug };
+const getUserRole = (): string => {
+  try {
+    const userStr = localStorage.getItem("user") || localStorage.getItem("user_data");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return user.role || "";
+    }
+  } catch {
+    // Abaikan
+  }
+  return "";
 };
 
 const formatDate = (iso: string): string =>
   new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 
-// Jam tanpa detik, dengan titik dua (bawaan id-ID memakai titik)
 const formatTime = (iso: string): string =>
   new Date(iso)
     .toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false })
     .replace(".", ":");
 
-// Keterangan waktu relatif; hanya untuk 7 hari terakhir
 const formatRelative = (iso: string): string | null => {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return "baru saja";
@@ -152,14 +132,13 @@ const formatRelative = (iso: string): string | null => {
   return null;
 };
 
-export default function AuditTrail() {
+export default function AuditTrail({ resourceType: propResourceType, resourceId }: AuditTrailProps) {
   const [logs, setLogs] = useState<AuditEntry[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // State untuk Filter & Paginasi
   const [actionFilter, setActionFilter] = useState<string>("");
-  const [resourceType, setResourceType] = useState<string>("");
+  const [resourceTypeFilter, setResourceTypeFilter] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -167,7 +146,6 @@ export default function AuditTrail() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(0);
 
-  // State Modal Detail Snapshot
   const [selectedSnapshot, setSelectedSnapshot] = useState<Record<string, unknown> | null>(null);
   const [showRawJson, setShowRawJson] = useState<boolean>(false);
 
@@ -185,23 +163,43 @@ export default function AuditTrail() {
         page,
         page_size: 10,
         action: actionFilter || undefined,
-        resource_type: resourceType || undefined,
+        resource_type: propResourceType || resourceTypeFilter || undefined,
+        resource_id: resourceId ? String(resourceId) : undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        search: searchQuery || undefined,
       };
 
       const data = await getAuditLogs(params);
       
-      // Menangani format respons paginasi standar ({ count, results })
+      let results = Array.isArray(data) ? data : (data.results || []);
+      const role = getUserRole();
+
+      if (role === "subcontractor") {
+        results = results.filter((log) => {
+          const isValidResource = log.resource_type === "permits.permit" || log.resource_type === "hira.hiradocument";
+          const isValidAction = log.action !== "mk_otp_sent" && log.action !== "mk_otp_failed";
+          return isValidResource && isValidAction;
+        });
+      }
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        results = results.filter((log) => 
+          (log.resource_title && log.resource_title.toLowerCase().includes(query)) ||
+          (log.actor_name && log.actor_name.toLowerCase().includes(query)) ||
+          (log.remarks && log.remarks.toLowerCase().includes(query)) ||
+          (log.action_label && log.action_label.toLowerCase().includes(query)) ||
+          (log.resource_id && String(log.resource_id).toLowerCase().includes(query))
+        );
+      }
+
+      setLogs(results);
       if (Array.isArray(data)) {
-        setLogs(data);
-        setTotalItems(data.length);
+        setTotalItems(results.length);
         setTotalPages(1);
       } else {
-        setLogs(data.results || []);
-        setTotalItems(data.count || 0);
-        setTotalPages(Math.ceil((data.count || 0) / 10));
+        setTotalItems(data.count || results.length);
+        setTotalPages(Math.ceil((data.count || results.length) / 10));
       }
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
@@ -216,23 +214,38 @@ export default function AuditTrail() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, actionFilter, resourceType, dateFrom, dateTo, searchQuery]);
+  }, [page, actionFilter, propResourceType, resourceTypeFilter, resourceId, dateFrom, dateTo, searchQuery]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Reset semua filter
   const handleResetFilters = () => {
     setActionFilter("");
-    setResourceType("");
+    setResourceTypeFilter("");
     setDateFrom("");
     setDateTo("");
     setSearchQuery("");
     setPage(1);
   };
 
-  // Helper Badge Warna Aksi
+  const handleOpenDetail = async (log: AuditEntry) => {
+    const role = getUserRole();
+    if ((role === "hse_officer" || role === "hse_coordinator") && !log.snapshot) {
+      try {
+        setIsLoading(true);
+        const detailData = await getAuditLogDetail(log.id);
+        setSelectedSnapshot(detailData.snapshot || null);
+      } catch {
+        setErrorMessage("Gagal memuat detail audit log.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setSelectedSnapshot(log.snapshot || null);
+    }
+  };
+
   const getActionBadgeClass = (action: AuditAction | string) => {
     switch (action) {
       case "created":
@@ -255,31 +268,46 @@ export default function AuditTrail() {
         return "bg-dark";
       case "number_set":
         return "bg-info text-white";
+      case "photo_added":
+      case "attachment_added":
+        return "bg-primary text-white";
+      case "photo_removed":
+      case "attachment_removed":
+        return "bg-danger text-white";
+      case "mk_link_issued":
+      case "mk_otp_sent":
+        return "bg-secondary text-white";
+      case "mk_otp_failed":
+        return "bg-danger";
       default:
-        return "bg-secondary";
+        return "bg-primary";
     }
   };
 
-  return (
-    <div className="container-fluid py-4 px-3 px-md-4">
-      {/* Header */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-2 border-bottom">
-        <div>
-          <h2 className="h4 fw-bold text-dark mb-1">Audit Log</h2>
-          <p className="text-muted small mb-0">
-            Riwayat aktivitas dan catatan perubahan sistem keselamatan kerja (HSE).
-          </p>
-        </div>
-        <button
-          className="btn btn-outline-success btn-sm mt-3 mt-md-0 d-inline-flex align-items-center gap-2 align-self-start align-self-md-auto"
-          onClick={fetchLogs}
-          disabled={isLoading}
-        >
-          <i className="bi bi-arrow-clockwise"></i> Refresh Data
-        </button>
-      </div>
+  const isTimelineMode = Boolean(propResourceType && resourceId);
+  const currentRole = getUserRole();
+  const canSeeDetail = currentRole === "hse_officer" || currentRole === "hse_coordinator";
 
-      {/* Alert Error */}
+  return (
+    <div className={isTimelineMode ? "container-fluid py-2 px-0" : "container-fluid py-4 px-3 px-md-4"}>
+      {!isTimelineMode && (
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-2 border-bottom">
+          <div>
+            <h2 className="h4 fw-bold text-dark mb-1">Audit Log</h2>
+            <p className="text-muted small mb-0">
+              Riwayat aktivitas dan catatan perubahan sistem keselamatan kerja (HSE).
+            </p>
+          </div>
+          <button
+            className="btn btn-outline-success btn-sm mt-3 mt-md-0 d-inline-flex align-items-center gap-2 align-self-start align-self-md-auto"
+            onClick={fetchLogs}
+            disabled={isLoading}
+          >
+            <i className="bi bi-arrow-clockwise"></i> Refresh Data
+          </button>
+        </div>
+      )}
+
       {errorMessage && (
         <div className="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
           <small>{errorMessage}</small>
@@ -291,141 +319,149 @@ export default function AuditTrail() {
         </div>
       )}
 
-      {/* Card Filter */}
-      <div className="card border-0 shadow-sm rounded-3 mb-4">
-        <div className="card-body p-3 p-md-4">
-          <div className="row g-3">
-            <div className="col-12 col-md-3">
-              <label htmlFor="audit-search" className="form-label fw-semibold text-secondary small">CARI KATA KUNCI</label>
-              <input
-                id="audit-search"
-                type="text"
-                className="form-control form-control-sm bg-light"
-                placeholder="Cari kata kunci / ID..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setPage(1);
-                }}
-              />
+      {!isTimelineMode && (
+        <div className="card border-0 shadow-sm rounded-3 mb-4">
+          <div className="card-body p-3 p-md-4">
+            <div className="row g-3">
+              <div className="col-12 col-md-3">
+                <label htmlFor="audit-search" className="form-label fw-semibold text-secondary small">CARI KATA KUNCI</label>
+                <input
+                  id="audit-search"
+                  type="text"
+                  className="form-control form-control-sm bg-light"
+                  placeholder="Cari kata kunci / ID..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="col-6 col-md-2">
+                <label htmlFor="audit-action-filter" className="form-label fw-semibold text-secondary small">TIPE AKSI</label>
+                <select
+                  id="audit-action-filter"
+                  className="form-select form-select-sm bg-light"
+                  value={actionFilter}
+                  onChange={(e) => {
+                    setActionFilter(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Semua Aksi</option>
+                  <option value="created">Membuat</option>
+                  <option value="updated">Mengubah</option>
+                  <option value="deleted">Menghapus</option>
+                  <option value="submitted">Mengajukan</option>
+                  <option value="approved">Menyetujui</option>
+                  <option value="rejected">Menolak</option>
+                  <option value="cancelled">Membatalkan</option>
+                  <option value="close_requested">Mengajukan penutupan</option>
+                  <option value="closed">Menutup</option>
+                  <option value="mk_link_issued">Tautan MK</option>
+                </select>
+              </div>
+
+              <div className="col-6 col-md-3">
+                <label htmlFor="audit-resource-type" className="form-label fw-semibold text-secondary small">RESOURCE TYPE</label>
+                <select
+                  id="audit-resource-type"
+                  className="form-select form-select-sm bg-light"
+                  value={resourceTypeFilter}
+                  onChange={(e) => {
+                    setResourceTypeFilter(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Semua Resource</option>
+                  <option value="permits.permit">Izin Kerja</option>
+                  <option value="hira.hiradocument">Dokumen HIRA</option>
+                  <option value="hira.hiragroup">Grup Lokasi HIRA</option>
+                  <option value="hira.hiraactivity">Aktivitas HIRA</option>
+                  <option value="projects.project">Proyek</option>
+                </select>
+              </div>
+
+              <div className="col-6 col-md-2">
+                <label htmlFor="audit-date-from" className="form-label fw-semibold text-secondary small">DARI TANGGAL</label>
+                <input
+                  id="audit-date-from"
+                  type="date"
+                  className="form-control form-control-sm bg-light"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="col-6 col-md-2">
+                <label htmlFor="audit-date-to" className="form-label fw-semibold text-secondary small">SAMPAI TANGGAL</label>
+                <input
+                  id="audit-date-to"
+                  type="date"
+                  className="form-control form-control-sm bg-light"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
             </div>
 
-            {/* Filter Tipe Aksi */}
-            <div className="col-6 col-md-2">
-              <label htmlFor="audit-action-filter" className="form-label fw-semibold text-secondary small">TIPE AKSI</label>
-              <select
-                id="audit-action-filter"
-                className="form-select form-select-sm bg-light"
-                value={actionFilter}
-                onChange={(e) => {
-                  setActionFilter(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Semua Aksi</option>
-                {Object.entries(ACTION_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter Resource Type */}
-            <div className="col-6 col-md-3">
-              <label htmlFor="audit-resource-type" className="form-label fw-semibold text-secondary small">RESOURCE TYPE</label>
-              <select
-                id="audit-resource-type"
-                className="form-select form-select-sm bg-light"
-                value={resourceType}
-                onChange={(e) => {
-                  setResourceType(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Semua Resource</option>
-                {Object.entries(RESOURCE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-6 col-md-2">
-              <label htmlFor="audit-date-from" className="form-label fw-semibold text-secondary small">DARI TANGGAL</label>
-              <input
-                id="audit-date-from"
-                type="date"
-                className="form-control form-control-sm bg-light"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-
-            <div className="col-6 col-md-2">
-              <label htmlFor="audit-date-to" className="form-label fw-semibold text-secondary small">SAMPAI TANGGAL</label>
-              <input
-                id="audit-date-to"
-                type="date"
-                className="form-control form-control-sm bg-light"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
+            {(actionFilter || resourceTypeFilter || dateFrom || dateTo || searchQuery) && (
+              <div className="mt-3 text-end">
+                <button
+                  type="button"
+                  className="btn btn-link text-decoration-none btn-sm text-danger p-0"
+                  onClick={handleResetFilters}
+                >
+                  &times; Reset Filter
+                </button>
+              </div>
+            )}
           </div>
-
-          {(actionFilter || resourceType || dateFrom || dateTo || searchQuery) && (
-            <div className="mt-3 text-end">
-              <button
-                type="button"
-                className="btn btn-link text-decoration-none btn-sm text-danger p-0"
-                onClick={handleResetFilters}
-              >
-                &times; Reset Filter
-              </button>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Tabel Audit Logs */}
+      {/* Tabel Audit Logs / Timeline */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "900px" }}>
+            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "750px" }}>
               <thead className="table-light border-bottom">
                 <tr className="text-secondary small fw-bold text-uppercase">
-                  <th className="py-3 px-3" style={{ width: "16%" }}>Waktu</th>
-                  <th className="py-3 px-3" style={{ width: "24%" }}>Pelaku</th>
-                  <th className="py-3 px-3" style={{ width: "36%" }}>Aktivitas</th>
-                  <th className="py-3 px-3" style={{ width: "14%" }}>IP Address</th>
-                  <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Data</th>
+                  <th className="py-3 px-3" style={{ width: "20%" }}>Waktu</th>
+                  <th className="py-3 px-3" style={{ width: "28%" }}>Pelaku</th>
+                  <th className="py-3 px-3" style={{ width: canSeeDetail ? "42%" : "52%" }}>Aktivitas</th>
+                  {canSeeDetail && (
+                    <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Detail</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-5">
+                    <td colSpan={canSeeDetail ? 4 : 3} className="text-center py-5">
                       <div className="spinner-border text-success spinner-border-sm me-2" role="status"></div>
                       <span className="text-muted small">Memuat data audit log...</span>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-5 text-muted">
+                    <td colSpan={canSeeDetail ? 4 : 3} className="text-center py-5 text-muted">
                       Tidak ada riwayat aktivitas ditemukan.
                     </td>
                   </tr>
                 ) : (
                   logs.map((log) => {
-                    const actor = parseActor(log.actor_label || (log.user != null ? String(log.user) : null));
                     const relative = formatRelative(log.timestamp);
-                    const resourceLabel = RESOURCE_LABELS[log.resource_type] || log.resource_type;
                     const routeFor = RESOURCE_ROUTES[log.resource_type];
-                    const canOpen = routeFor && log.action !== "deleted";
+                    const canOpen = !isTimelineMode && routeFor && log.action !== "deleted";
+                    const roleName = ROLE_LABELS[log.actor_role] || log.actor_role;
 
                     return (
                       <tr key={log.id}>
@@ -439,11 +475,11 @@ export default function AuditTrail() {
                         </td>
 
                         <td className="px-3">
-                          <div className="fw-semibold text-dark small text-truncate">{actor.name}</div>
-                          {actor.role && (
-                            <div className="text-muted" style={{ fontSize: "11px" }}>{actor.role}</div>
+                          <div className="fw-semibold text-dark small text-truncate">{log.actor_name || "Sistem"}</div>
+                          {roleName && (
+                            <div className="text-muted" style={{ fontSize: "11px" }}>{roleName}</div>
                           )}
-                          {log.remarks && (
+                          {log.remarks && log.remarks !== log.summary && (
                             <span className="text-muted d-block fst-italic" style={{ fontSize: "11px" }}>
                               {log.remarks}
                             </span>
@@ -451,43 +487,47 @@ export default function AuditTrail() {
                         </td>
 
                         <td className="px-3">
-                          <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1 me-2`}>
-                            {ACTION_LABELS[log.action] || log.action}
-                          </span>
-                          {canOpen ? (
-                            <Link
-                              to={routeFor(log.resource_id)}
-                              className="fw-semibold small text-decoration-none"
-                              title="Buka dokumen"
-                            >
-                              {resourceLabel} #{log.resource_id}
-                            </Link>
-                          ) : (
-                            <span className="fw-semibold text-dark small">
-                              {resourceLabel} #{log.resource_id}
+                          <div className="mb-1">
+                            <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1 me-2`}>
+                              {log.action_label || log.action}
                             </span>
+                            {canOpen ? (
+                              <Link
+                                to={routeFor(log.resource_id)}
+                                className="fw-semibold small text-decoration-none"
+                                title="Buka dokumen"
+                              >
+                                {log.resource_title || `${log.resource_label} #${log.resource_id}`}
+                              </Link>
+                            ) : (
+                              <span className="fw-semibold text-dark small">
+                                {log.resource_title || `${log.resource_label} #${log.resource_id}`}
+                              </span>
+                            )}
+                          </div>
+                          {log.summary && (
+                            <div className="text-secondary small fst-italic" style={{ fontSize: "12px" }}>
+                              {log.summary}
+                            </div>
+                          )}
+                          {log.project_name && (
+                            <div className="text-muted" style={{ fontSize: "11px" }}>
+                              Proyek: {log.project_name}
+                            </div>
                           )}
                         </td>
 
-                        <td className="px-3 text-nowrap">
-                          <code className="text-dark bg-light px-2 py-1 rounded small">
-                            {log.ip_address || "-"}
-                          </code>
-                        </td>
-
-                        <td className="px-3 text-center">
-                          {log.snapshot ? (
+                        {canSeeDetail && (
+                          <td className="px-3 text-center">
                             <button
                               className="btn btn-sm btn-outline-secondary px-3"
-                              onClick={() => setSelectedSnapshot(log.snapshot)}
+                              onClick={() => handleOpenDetail(log)}
                               title="Lihat isi data saat aktivitas ini terjadi"
                             >
                               <i className="bi bi-file-code"></i> Detail
                             </button>
-                          ) : (
-                            <span className="text-muted small">-</span>
-                          )}
-                        </td>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
