@@ -427,16 +427,17 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
         </div>
       )}
 
-      {/* Tabel Audit Logs / Timeline */}
+      {/* Tabel Audit Logs / Timeline dengan Kolom Terpisah */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "750px" }}>
+            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead className="table-light border-bottom">
                 <tr className="text-secondary small fw-bold text-uppercase">
-                  <th className="py-3 px-3" style={{ width: "20%" }}>Waktu</th>
-                  <th className="py-3 px-3" style={{ width: "28%" }}>Pelaku</th>
-                  <th className="py-3 px-3" style={{ width: canSeeDetail ? "42%" : "52%" }}>Aktivitas</th>
+                  <th className="py-3 px-3" style={{ width: "16%" }}>Waktu</th>
+                  <th className="py-3 px-3" style={{ width: "20%" }}>Pelaku</th>
+                  <th className="py-3 px-3" style={{ width: "18%" }}>Aksi</th>
+                  <th className="py-3 px-3" style={{ width: "26%" }}>Dokumen & Keterangan</th>
                   {canSeeDetail && (
                     <th className="py-3 px-3 text-center" style={{ width: "10%" }}>Detail</th>
                   )}
@@ -445,14 +446,14 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={canSeeDetail ? 4 : 3} className="text-center py-5">
+                    <td colSpan={canSeeDetail ? 5 : 4} className="text-center py-5">
                       <div className="spinner-border text-success spinner-border-sm me-2" role="status"></div>
                       <span className="text-muted small">Memuat data audit log...</span>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={canSeeDetail ? 4 : 3} className="text-center py-5 text-muted">
+                    <td colSpan={canSeeDetail ? 5 : 4} className="text-center py-5 text-muted">
                       Tidak ada riwayat aktivitas ditemukan.
                     </td>
                   </tr>
@@ -465,6 +466,7 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
 
                     return (
                       <tr key={log.id}>
+                        {/* Kolom Waktu */}
                         <td className="px-3" title={new Date(log.timestamp).toLocaleString("id-ID")}>
                           <small className="fw-semibold text-dark">{formatDate(log.timestamp)}</small>
                           <br />
@@ -474,49 +476,62 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
                           </span>
                         </td>
 
+                        {/* Kolom Pelaku */}
                         <td className="px-3">
                           <div className="fw-semibold text-dark small text-truncate">{log.actor_name || "Sistem"}</div>
                           {roleName && (
                             <div className="text-muted" style={{ fontSize: "11px" }}>{roleName}</div>
                           )}
-                          {log.remarks && log.remarks !== log.summary && (
-                            <span className="text-muted d-block fst-italic" style={{ fontSize: "11px" }}>
-                              {log.remarks}
-                            </span>
-                          )}
                         </td>
 
+                        {/* Kolom Aksi (Badge) */}
+                        <td className="px-3">
+                          <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1`}>
+                            {log.action_label || log.action}
+                          </span>
+                        </td>
+
+                        {/* Kolom Dokumen & Keterangan dengan Konteks Lengkap */}
                         <td className="px-3">
                           <div className="mb-1">
-                            <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1 me-2`}>
-                              {log.action_label || log.action}
-                            </span>
                             {canOpen ? (
                               <Link
                                 to={routeFor(log.resource_id)}
-                                className="fw-semibold small text-decoration-none"
+                                className="fw-semibold small text-decoration-none text-primary"
                                 title="Buka dokumen"
                               >
-                                {log.resource_title || `${log.resource_label} #${log.resource_id}`}
+                                <i className="bi bi-file-earmark-text me-1"></i>
+                                {/* Menampilkan Tipe & ID Dokumen dengan jelas */}
+                                <span>{log.resource_label || "Dokumen"} #{log.resource_id}</span>
+                                {log.resource_title && (
+                                  <span className="text-muted fw-normal ms-1">({log.resource_title})</span>
+                                )}
                               </Link>
                             ) : (
                               <span className="fw-semibold text-dark small">
-                                {log.resource_title || `${log.resource_label} #${log.resource_id}`}
+                                <i className="bi bi-file-earmark-text me-1"></i>
+                                <span>{log.resource_label || "Dokumen"} #{log.resource_id}</span>
+                                {log.resource_title && (
+                                  <span className="text-muted fw-normal ms-1">({log.resource_title})</span>
+                                )}
                               </span>
                             )}
                           </div>
+
                           {log.summary && (
-                            <div className="text-secondary small fst-italic" style={{ fontSize: "12px" }}>
-                              {log.summary}
+                            <div className="text-secondary small fst-italic mt-1" style={{ fontSize: "12px" }}>
+                              <span className="fw-semibold not-italic text-dark">Catatan:</span> {log.summary}
                             </div>
                           )}
+
                           {log.project_name && (
-                            <div className="text-muted" style={{ fontSize: "11px" }}>
-                              Proyek: {log.project_name}
+                            <div className="text-muted mt-1" style={{ fontSize: "11px" }}>
+                              <i className="bi bi-folder2 me-1"></i> Proyek: <span className="fw-medium">{log.project_name}</span>
                             </div>
                           )}
                         </td>
 
+                        {/* Kolom Detail (Hanya untuk HSE Officer & Coordinator) */}
                         {canSeeDetail && (
                           <td className="px-3 text-center">
                             <button
