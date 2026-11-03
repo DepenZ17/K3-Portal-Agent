@@ -1,59 +1,55 @@
 // src/services/dashboardServices.ts
 import api from "./api";
 
-/**
- * Interface untuk menampung statistik ringkasan Dashboard.
- * Data diisi secara dinamis oleh backend sesuai dengan role pengguna yang login.
- */
+/** Hitungan dokumen per jenis (HIRA atau izin kerja). total tidak termasuk dokumen yang dibatalkan. */
+export interface DocumentCounts {
+  total: number;
+  draft: number;
+  /** Sedang direviu (untuk izin kerja: termasuk menunggu MK dan menunggu penutupan) */
+  pending: number;
+  /** Untuk izin kerja: sudah termasuk yang ditutup */
+  approved: number;
+  rejected: number;
+}
+
+/** GET /dashboard/stats/ — bentuknya sama untuk semua role; isinya mengikuti apa yang boleh dilihat role itu. */
 export interface DashboardStats {
-  /** Jumlah dokumen yang sudah disetujui (Khusus Role Subcontractor) */
-  approved_count?: number;
-  /** Jumlah dokumen yang sedang menanti verifikasi/reviu */
-  pending_count?: number;
-  /** Jumlah dokumen yang ditolak (Khusus Role Subcontractor) */
-  rejected_count?: number;
-  /** Total keseluruhan dokumen HIRA yang terdaftar (Khusus Role Approver/HSE/PM) */
-  total_hira?: number;
-  /** Total keseluruhan izin kerja (Work Permit) yang terdaftar (Khusus Role Approver/HSE/PM) */
-  total_permits?: number;
+  role: string;
+  hira: DocumentCounts;
+  permits: DocumentCounts;
+  /** Jumlah antrean tugas. Angka untuk tile "Pending Aksi". Tidak bergantung pada ?limit= */
+  pending_action: number;
 }
 
-/**
- * Interface untuk menampung item antrean tugas (Approval Queue) di Dashboard.
- * Berisi ringkasan dokumen yang memerlukan tindakan cepat dari pengguna.
- * Catatan: URL rute dikendalikan sepenuhnya oleh frontend.
- */
+export type DashboardTaskType = "permit" | "hira";
+
+/** GET /dashboard/tasks/ */
 export interface DashboardTask {
-  /** ID unik dokumen dari database */
   id: number;
-  /** Judul atau deskripsi singkat tugas */
+  /** Buka dokumen dengan type + id. Urutan id HIRA dan izin kerja bisa sama. */
+  type: DashboardTaskType;
+  /** Teks tampilan, jangan dipakai untuk logika */
   title: string;
-  /** Kategori dokumen untuk penanda badge (contoh: "Izin Kerja" atau "HIRA") */
+  /** Hanya teks badge */
   category: string;
-  /** Status workflow terkini dokumen */
+  /** Kunci status workflow, mis. pending_supervisor */
   status: string;
+  status_label: string;
+  project: number;
+  project_name: string;
+  /** subcontractor | supervisor | hse_officer | project_manager | mk. Bandingkan dengan role pengguna. */
+  waiting_on: string;
+  waiting_on_label: string;
+  updated_at: string;
 }
 
-/**
- * Mengambil ringkasan statistik operasional K3 dari backend.
- * @returns Promise berisi objek statistik (DashboardStats)
- */
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const response = await api.get<DashboardStats>("/api/dashboard/stats/");
+  const response = await api.get<DashboardStats>("/dashboard/stats/");
   return response.data;
 }
 
-/**
- * Mengambil daftar antrean tugas atau dokumen yang memerlukan tindakan persetujuan (approval).
- * Mendukung format response array langsung maupun response paginasi DRF ({ results: [...] }).
- * @returns Promise berisi daftar array antrean tugas (DashboardTask[])
- */
-export async function getDashboardTasks(): Promise<DashboardTask[]> {
-  const response = await api.get<DashboardTask[] | { results: DashboardTask[] }>("/api/dashboard/tasks/");
-  
-  if (Array.isArray(response.data)) {
-    return response.data;
-  }
-  
-  return response.data.results || [];
+/** Array polos (tanpa paginasi), yang paling lama menunggu di urutan pertama. limit default 10, maksimal 50. */
+export async function getDashboardTasks(limit = 10): Promise<DashboardTask[]> {
+  const response = await api.get<DashboardTask[]>("/dashboard/tasks/", { params: { limit } });
+  return Array.isArray(response.data) ? response.data : [];
 }
