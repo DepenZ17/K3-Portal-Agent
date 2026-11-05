@@ -20,11 +20,11 @@ const formatRelative = (iso?: string): string => {
   return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 };
 
-// Rangkai URL tujuan dari target_type dan target_id
-const getNotificationRoute = (targetType: string, targetId: number): string => {
-  const type = targetType.toLowerCase();
-  if (type.includes("permit") || type === "izin_kerja") return `/work-permit/${targetId}`;
-  if (type.includes("hira")) return `/hira/${targetId}`;
+// Rangkai URL tujuan dari type dan resource_id (sesuai spesifikasi backend & dashboard)
+const getNotificationRoute = (targetType: string, resourceId: number): string => {
+  const type = targetType ? targetType.toLowerCase() : "";
+  if (type.includes("permit") || type === "izin_kerja") return `/work-permit/${resourceId}`;
+  if (type.includes("hira")) return `/hira/${resourceId}`;
   return "/work-permit/list"; // Fallback default
 };
 
@@ -49,7 +49,7 @@ export default function Navbar() {
   const fetchNotifications = useCallback(async () => {
     try {
       const data = await getNotifications();
-      setNotifications(data);
+      setNotifications(data.results || []); // Ambil array results dari response paginasi
     } catch (error) {
       console.error("Gagal memuat notifikasi:", error);
     }
@@ -62,7 +62,7 @@ export default function Navbar() {
     const load = async () => {
       try {
         const data = await getNotifications();
-        if (!cancelled) setNotifications(data);
+        if (!cancelled) setNotifications(data.results || []); // Ambil array results dari response paginasi
       } catch (error) {
         console.error("Gagal memuat notifikasi:", error);
       }
@@ -89,11 +89,11 @@ export default function Navbar() {
   const handleNotificationClick = async (item: NotificationItem) => {
     setIsNotifOpen(false);
     setIsOpen(false);
-    navigate(getNotificationRoute(item.target_type, item.target_id));
+    navigate(getNotificationRoute(item.type, item.resource_id)); // Menggunakan type & resource_id
 
-    if (!item.is_read) {
+    if (!item.read_at) {
       // Perbarui tampilan langsung, lalu kabari backend
-      setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, is_read: true } : n)));
+      setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
       try {
         await markNotificationAsRead(item.id);
       } catch (error) {
@@ -103,9 +103,9 @@ export default function Navbar() {
     }
   };
 
-  // Hitung jumlah notifikasi yang belum dibaca
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
+  // Hitung jumlah notifikasi yang belum dibaca (read_at === null) dan belum diselesaikan orang lain
+  const unreadCount = notifications.filter((n) => !n.read_at && (n.needs_action !== false || !n.resolution_note)).length;
+  
   // Tutup dropdown notifikasi saat klik di luar area
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -225,27 +225,40 @@ export default function Navbar() {
                 </li>
 
                 {notifications.length > 0 ? (
-                  notifications.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        className={`dropdown-item py-2 border-bottom ${!item.is_read ? "bg-light" : ""}`}
-                        style={{ whiteSpace: "normal" }}
-                        onClick={() => handleNotificationClick(item)}
-                      >
-                        <div className={`small text-dark ${!item.is_read ? "fw-bold" : ""}`}>
-                          {!item.is_read && <span className="text-primary me-1">●</span>}
-                          {item.title}
-                        </div>
-                        <div className="text-muted" style={{ fontSize: "11px" }}>{item.body}</div>
-                        {item.created_at && (
-                          <div className="text-muted" style={{ fontSize: "10px" }}>
-                            {formatRelative(item.created_at)}
+                  notifications.slice(0, 10).map((item) => {
+                    const isUnread = !item.read_at; // Cek read_at bernilai null
+                    const isResolvedByOthers = !item.needs_action && item.resolution_note; // Kasus "Someone else already handled it"
+
+                    return (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className={`dropdown-item py-2 border-bottom ${isUnread ? "bg-light" : ""}`}
+                          style={{ whiteSpace: "normal", opacity: isResolvedByOthers ? 0.7 : 1 }}
+                          onClick={() => handleNotificationClick(item)}
+                        >
+                          <div className={`small text-dark ${isUnread ? "fw-bold" : ""}`}>
+                            {isUnread && <span className="text-primary me-1">●</span>}
+                            {item.title}
                           </div>
-                        )}
-                      </button>
-                    </li>
-                  ))
+                          <div className="text-muted" style={{ fontSize: "11px" }}>{item.body}</div>
+                          
+                          {/* Menampilkan catatan penyelesaian jika ditangani orang lain */}
+                          {isResolvedByOthers && (
+                            <div className="text-danger fst-italic mt-1" style={{ fontSize: "11px" }}>
+                              <i className="bi bi-info-circle me-1"></i> {item.resolution_note}
+                            </div>
+                          )}
+
+                          {item.created_at && (
+                            <div className="text-muted mt-1" style={{ fontSize: "10px" }}>
+                              {formatRelative(item.created_at)}
+                            </div>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })
                 ) : (
                   <li>
                     <span className="dropdown-item text-center text-muted small py-3">

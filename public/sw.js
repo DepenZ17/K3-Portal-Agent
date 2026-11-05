@@ -11,12 +11,26 @@ self.addEventListener("push", (event) => {
   }
 
   const title = data.title || "Notifikasi Portal K3";
+  
+  // Menentukan URL target secara dinamis berdasarkan type dan resource_id (sesuai aturan spesifikasi)
+  let targetUrl = data.url;
+  if (!targetUrl && data.type && data.resource_id) {
+    const normalizedType = String(data.type).toLowerCase();
+    if (normalizedType.includes("hira")) {
+      targetUrl = `/hira/${data.resource_id}`;
+    } else if (normalizedType.includes("permit") || normalizedType.includes("izin")) {
+      targetUrl = `/work-permit/${data.resource_id}`;
+    }
+  }
+  // Fallback default jika tidak ada rute spesifik
+  targetUrl = targetUrl || "/work-permit/list";
+
   const options = {
     body: data.body || "Ada pembaruan status atau dokumen K3 terbaru.",
     icon: "/favicon.ico", // Path ke ikon aplikasi K3
     badge: "/favicon.ico", // Ikon kecil untuk bar notifikasi Android
     data: {
-      url: data.url || "/work-permit/list", // Fallback URL saat notifikasi diklik
+      url: targetUrl,
     },
   };
 
@@ -27,7 +41,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data.url;
+  const targetUrl = event.notification.data.url || "/work-permit/list";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {

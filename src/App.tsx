@@ -1,321 +1,399 @@
-// src/App.tsx
+
+ // src/App.tsx
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
 import AppLayout from "./components/AppLayout";
-
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import HiraList from "./pages/hira/HiraList";
-import HiraForm from "./pages/hira/HiraForm";
-import HiraDetail from "./pages/hira/HiraDetail";
-import AuditTrail from "./pages/AuditTrail";
-import Rules from "./pages/Rules";
-import WorkPermitList from "./pages/workPermit/WorkPermitList";
-import WorkPermitMenu from "./pages/WorkPermitMenu";
-
-import WorkPermitHeightForm from "./pages/workPermit/WorkPermitHeightForm";
-import WorkPermitConfinedSpaceForm from "./pages/workPermit/WorkPermitConfinedSpaceForm";
-import WorkPermitHotWorkForm from "./pages/workPermit/WorkPermitHotWorkForm";
-import WorkPermitLiftingForm from "./pages/workPermit/WorkPermitLiftingForm";
-import WorkPermitTowerCraneForm from "./pages/workPermit/WorkPermitTowerCraneForm";
-
-import WorkPermitDetail from "./pages/workPermit/WorkPermitDetail";
-import WorkPermitPrint from "./pages/workPermit/WorkPermitPrint";
-
-import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
-import MkApprovalPage from "./pages/MkApprovalPage";
+
+// Lazy Loading - General Pages
+const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
+const AuditTrail = lazy(() => import("./pages/AuditTrail"));
+const Rules = lazy(() => import("./pages/Rules"));
+
+// Lazy Loading - HIRA
+const HiraList = lazy(() => import("./pages/hira/HiraList"));
+const HiraForm = lazy(() => import("./pages/hira/HiraForm"));
+const HiraDetail = lazy(() => import("./pages/hira/HiraDetail"));
+
+// Lazy Loading - Work Permit
+const WorkPermitList = lazy(() => import("./pages/workPermit/WorkPermitList"));
+const WorkPermitMenu = lazy(() => import("./pages/WorkPermitMenu"));
+
+const WorkPermitHeightForm = lazy(
+  () => import("./pages/workPermit/WorkPermitHeightForm")
+);
+
+const WorkPermitConfinedSpaceForm = lazy(
+  () => import("./pages/workPermit/WorkPermitConfinedSpaceForm")
+);
+
+const WorkPermitHotWorkForm = lazy(
+  () => import("./pages/workPermit/WorkPermitHotWorkForm")
+);
+
+const WorkPermitLiftingForm = lazy(
+  () => import("./pages/workPermit/WorkPermitLiftingForm")
+);
+
+const WorkPermitTowerCraneForm = lazy(
+  () => import("./pages/workPermit/WorkPermitTowerCraneForm")
+);
+
+const WorkPermitDetail = lazy(
+  () => import("./pages/workPermit/WorkPermitDetail")
+);
+
+const WorkPermitPrint = lazy(
+  () => import("./pages/workPermit/WorkPermitPrint")
+);
+
+// Lazy Loading - Public MK Approval
+const MkApprovalPage = lazy(
+  () => import("./pages/MkApprovalPage")
+);
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Default ke /login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Halaman Tanpa Navbar */}
-        <Route path="/login" element={<Login />} />
-
-        {/* Halaman Unauthorized */}
-        <Route
-          path="/unauthorized"
-          element={
-            <AppLayout>
-              <Unauthorized />
-            </AppLayout>
-          }
-        />
-
-        {/* Home */}
-        <Route
-          path="/home"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Home />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* HIRA List */}
-        <Route
-          path="/hira"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
+      <Suspense
+        fallback={
+          <div className="container py-5 text-center">
+            <div
+              className="spinner-border text-success"
+              role="status"
+              aria-label="Memuat halaman"
             >
+              <span className="visually-hidden">
+                Loading...
+              </span>
+            </div>
+
+            <p className="text-muted mt-2">
+              Memuat halaman...
+            </p>
+          </div>
+        }
+      >
+        <Routes>
+          {/* Default ke /login */}
+          <Route
+            path="/"
+            element={<Navigate to="/login" replace />}
+          />
+
+          {/* Halaman Tanpa Navbar */}
+          <Route
+            path="/login"
+            element={<Login />}
+          />
+
+          {/* Halaman Unauthorized */}
+          <Route
+            path="/unauthorized"
+            element={
               <AppLayout>
-                <HiraList />
+                <Unauthorized />
               </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+            }
+          />
 
-        {/* HIRA Form (Buat Baru) */}
-        <Route
-          path="/hira/create"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-              ]}
-            >
-              <AppLayout>
-                <HiraForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Home */}
+          <Route
+            path="/home"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Home />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* HIRA Form (Edit) */}
-        <Route
-          path="/hira/edit/:id"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-              ]}
-            >
-              <AppLayout>
-                <HiraForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* HIRA List */}
+          <Route
+            path="/hira"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <HiraList />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* HIRA Detail & Approval Actions */}
-        <Route
-          path="/hira/:id"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <HiraDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* HIRA Form (Buat Baru) */}
+          <Route
+            path="/hira/create"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                ]}
+              >
+                <AppLayout>
+                  <HiraForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Audit Trail */}
-        <Route
-          path="/audit"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <AuditTrail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* HIRA Form (Edit) */}
+          <Route
+            path="/hira/edit/:id"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                ]}
+              >
+                <AppLayout>
+                  <HiraForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Rules / Regulasi */}
-        <Route
-          path="/rules"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <Rules />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* HIRA Detail & Approval Actions */}
+          <Route
+            path="/hira/:id"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <HiraDetail />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* MENU UTAMA IZIN KERJA */}
-        <Route
-          path="/work-permit"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitMenu />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Audit Trail */}
+          <Route
+            path="/audit"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <AuditTrail />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* LIST SEMUA IZIN KERJA */}
-        <Route
-          path="/work-permit/list"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <WorkPermitList />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Rules / Prosedur Operasional K3 */}
+          <Route
+            path="/rules"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <Rules />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* FORM WORK PERMITS (Create & Edit) */}
-        <Route
-          path="/work-permit/height"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitHeightForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* MENU UTAMA IZIN KERJA */}
+          <Route
+            path="/work-permit"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitMenu />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/work-permit/:id/edit"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitHeightForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* LIST SEMUA IZIN KERJA */}
+          <Route
+            path="/work-permit/list"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <WorkPermitList />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/work-permit/confined-space"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitConfinedSpaceForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Working at Height */}
+          <Route
+            path="/work-permit/height"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitHeightForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/work-permit/hot-work"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitHotWorkForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Edit */}
+          <Route
+            path="/work-permit/:id/edit"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitHeightForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/work-permit/lifting"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitLiftingForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Confined Space */}
+          <Route
+            path="/work-permit/confined-space"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitConfinedSpaceForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/work-permit/tower-crane"
-          element={
-            <ProtectedRoute allowedRoles={["subcontractor"]}>
-              <AppLayout>
-                <WorkPermitTowerCraneForm />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Hot Work */}
+          <Route
+            path="/work-permit/hot-work"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitHotWorkForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* DETAIL IZIN KERJA (Ditempatkan setelah rute spesifik form/edit) */}
-        <Route
-          path="/work-permit/:id"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <WorkPermitDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Lifting */}
+          <Route
+            path="/work-permit/lifting"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitLiftingForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* PRINT IZIN KERJA */}
-        <Route
-          path="/work-permit/:id/print"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "subcontractor",
-                "hse_officer",
-                "hse_coordinator",
-                "supervisor",
-                "project_manager",
-              ]}
-            >
-              <AppLayout>
-                <WorkPermitPrint />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* FORM WORK PERMITS - Tower Crane */}
+          <Route
+            path="/work-permit/tower-crane"
+            element={
+              <ProtectedRoute
+                allowedRoles={["subcontractor"]}
+              >
+                <AppLayout>
+                  <WorkPermitTowerCraneForm />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Route publik untuk persetujuan eksternal MK */}
-    <Route path="/mk/:token" element={<MkApprovalPage />} />  
+          {/* DETAIL IZIN KERJA */}
+          <Route
+            path="/work-permit/:id"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <WorkPermitDetail />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
 
-      </Routes>
+          {/* PRINT IZIN KERJA */}
+          <Route
+            path="/work-permit/:id/print"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "subcontractor",
+                  "hse_officer",
+                  "hse_coordinator",
+                  "supervisor",
+                  "project_manager",
+                ]}
+              >
+                <AppLayout>
+                  <WorkPermitPrint />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* PUBLIC ROUTE - MK APPROVAL */}
+          <Route
+            path="/mk/:token"
+            element={<MkApprovalPage />}
+          />
+
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
