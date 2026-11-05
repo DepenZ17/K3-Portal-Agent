@@ -475,46 +475,86 @@ export default function WorkPermitDetailComponent() {
           <div className="d-flex flex-wrap gap-2 mb-4 p-3 bg-light rounded shadow-sm align-items-center justify-content-between">
             <span className="fw-semibold small text-muted">Aksi Tersedia:</span>
             <div className="d-flex flex-wrap gap-2">
-              {can("can_edit") && (
-                <button className="btn btn-outline-primary btn-sm" onClick={() => navigate(`/work-permit/${permit.id}/edit`)}>
-                  Edit Draft
-                </button>
-              )}
-              {can("can_submit") && (
-                <button className="btn btn-success btn-sm" onClick={handleSubmitPermit} disabled={actionLoading}>
-                  {actionLoading ? "Memproses GPS & Submit..." : "Submit Permohonan"}
-                </button>
-              )}
-              {can("can_decide") && (
-                <>
-                  <button className="btn btn-success btn-sm" onClick={() => { resetMessages(); setActiveModal("approve"); }}>
-                    Setujui (Approve)
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => { resetMessages(); setActiveModal("reject"); }}>
-                    Tolak (Reject)
-                  </button>
-                </>
-              )}
-              {can("can_set_number") && (
-                <button className="btn btn-info btn-sm text-white" onClick={() => { resetMessages(); setActiveModal("set-number"); }}>
-                  Set Nomor Dokumen
-                </button>
-              )}
-              {can("can_request_close") && (
-                <button className="btn btn-warning btn-sm" onClick={() => { resetMessages(); setActiveModal("close"); }}>
-                  Ajukan Penutupan (Request Close)
-                </button>
-              )}
-              {can("can_confirm_close") && (
-                <button className="btn btn-success btn-sm" onClick={handleConfirmClose} disabled={actionLoading}>
-                  Konfirmasi Penutupan (Confirm Close)
-                </button>
-              )}
-              {can("can_cancel") && (
-                <button className="btn btn-dark btn-sm" onClick={() => { resetMessages(); setActiveModal("cancel"); }}>
-                  Batalkan (Cancel)
-                </button>
-              )}
+            {/* Tombol Edit Draft */}
+            {can("can_edit") && (
+            <button 
+            className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" 
+            onClick={() => navigate(`/work-permit/${permit.id}/edit`)}
+            >
+            <i className="bi bi-pencil-square"></i> Edit Draft
+            </button>
+            )}
+
+            {/* Tombol Submit */}
+            {can("can_submit") && (
+            <button 
+            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+            onClick={handleSubmitPermit} 
+            disabled={actionLoading}
+            >
+            <i className="bi bi-send-check"></i>
+            {actionLoading ? "Memproses GPS & Submit..." : "Submit Permohonan"}
+            </button>
+            )}
+
+            {/* Tombol Approve & Reject */}
+            {can("can_decide") && (
+            <>
+            <button 
+            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+            onClick={() => { resetMessages(); setActiveModal("approve"); }}
+            >
+            <i className="bi bi-check-circle-fill"></i> Setujui (Approve)
+            </button>
+            <button 
+            className="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" 
+            onClick={() => { resetMessages(); setActiveModal("reject"); }}
+            >
+            <i className="bi bi-x-circle-fill"></i> Tolak (Reject)
+            </button>
+            </>
+            )}
+
+            {/* Tombol Set Nomor Dokumen */}
+            {can("can_set_number") && (
+            <button 
+            className="btn btn-info btn-sm text-white d-flex align-items-center gap-1 shadow-sm" 
+            onClick={() => { resetMessages(); setActiveModal("set-number"); }}
+            >
+            <i className="bi bi-hash"></i> Set Nomor Dokumen
+            </button>
+            )}
+
+            {/* Tombol Ajukan Penutupan */}
+            {can("can_request_close") && (
+            <button 
+            className="btn btn-warning btn-sm d-flex align-items-center gap-1 text-dark fw-semibold shadow-sm" 
+            onClick={() => { resetMessages(); setActiveModal("close"); }}
+            >
+            <i className="bi bi-flag-fill"></i> Ajukan Penutupan (Close)
+            </button>
+            )}
+
+            {/* Tombol Konfirmasi Penutupan */}
+            {can("can_confirm_close") && (
+            <button 
+            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+            onClick={handleConfirmClose} 
+            disabled={actionLoading}
+            >
+            <i className="bi bi-check2-all"></i> Konfirmasi Penutupan
+            </button>
+            )}
+
+            {/* Tombol Batalkan / Cancel */}
+            {can("can_cancel") && (
+            <button 
+            className="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" 
+            onClick={() => { resetMessages(); setActiveModal("cancel"); }}
+            >
+            <i className="bi bi-slash-circle"></i> Batalkan
+            </button>
+            )}
             </div>
           </div>
 
