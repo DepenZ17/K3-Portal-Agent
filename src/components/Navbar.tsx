@@ -217,8 +217,8 @@ export default function Navbar() {
               </button>
 
               <ul
-                className={`dropdown-menu dropdown-menu-end shadow border-0 mt-2 ${isNotifOpen ? "show" : ""}`}
-                style={{ width: "300px", maxHeight: "400px", overflowY: "auto", position: "absolute", right: 0, top: "100%" }}
+                className={`dropdown-menu dropdown-menu-start dropdown-menu-lg-end shadow border-0 mt-2 ${isNotifOpen ? "show" : ""}`}
+                style={{ width: "300px", maxWidth: "90vw", maxHeight: "400px", overflowY: "auto" }}
               >
                 <li className="dropdown-header fw-bold text-success border-bottom pb-2">
                   Notifikasi K3 ({unreadCount} Baru)
