@@ -55,27 +55,40 @@ export default function Navbar() {
     }
   }, []);
 
-  // Ambil saat dimuat, lalu segarkan berkala selama tab terlihat
+  // Polling aman menggunakan setTimeout rekursif (mencegah penumpukan request saat server lambat/pending)
   useEffect(() => {
     let cancelled = false;
+    let timerId: number;
 
     const load = async () => {
+      if (cancelled) return;
+      
       try {
         const data = await getNotifications();
-        if (!cancelled) setNotifications(data.results || []); // Ambil array results dari response paginasi
+        if (!cancelled) {
+          setNotifications(data.results || []);
+        }
       } catch (error) {
         console.error("Gagal memuat notifikasi:", error);
+      } finally {
+        // Jadwalkan poll berikutnya HANYA SETELAH request ini selesai
+        if (!cancelled) {
+          timerId = window.setTimeout(() => {
+            if (document.visibilityState === "visible") {
+              load();
+            } else {
+              timerId = window.setTimeout(load, POLL_INTERVAL_MS);
+            }
+          }, POLL_INTERVAL_MS);
+        }
       }
     };
 
     load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") load();
-    }, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timerId);
     };
   }, []);
 
