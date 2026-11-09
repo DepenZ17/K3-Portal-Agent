@@ -1,3 +1,4 @@
+// src/services/mkServices.ts
 import axios from "axios";
 
 // 1. URL Base Fallback ke Render jika VITE_API_BASE_URL belum ter-inject
@@ -33,15 +34,7 @@ export interface PermitDetail {
     decided_at?: string;
     decided_by?: string;
   }>;
-  [key: string]: unknown; // Mengizinkan field tambahan dari JSON backend
-}
-
-// 3. Response Portal Data MK
-export interface MkPortalResponse {
-  state: string;
-  contact_name: string;
-  expires_at: string;
-  permit: PermitDetail;
+  [key: string]: unknown;
 }
 
 export interface OtpDetails {
@@ -52,15 +45,24 @@ export interface OtpDetails {
   requests_left?: number;
 }
 
+// 3. Response Portal Data MK (Ditambahkan properti otp sesuai spesifikasi backend)[cite: 8]
+export interface MkPortalResponse {
+  state: string;
+  contact_name: string;
+  expires_at: string;
+  otp?: OtpDetails; 
+  permit: PermitDetail;
+}
+
 export interface OtpResponse {
   otp?: OtpDetails;
 }
 
 // ----------------------------------------------------
-// API Methods
+// API Methods (Publik tanpa Header Auth)[cite: 7]
 // ----------------------------------------------------
 
-// 1. Get Portal Data
+// 1. Get Portal Data (Satu-satunya yang dipanggil saat halaman dimuat)[cite: 8]
 export const getMkPortalData = async (token: string): Promise<MkPortalResponse> => {
   const response = await publicApi.get<MkPortalResponse>(`/mk/${token}/`);
   return response.data;
@@ -81,7 +83,7 @@ export const approveMkPermit = async (
   return response.data;
 };
 
-// 4. Tolak Permohonan oleh MK
+// 4. Tolak Permohonan oleh MK (Remarks wajib)[cite: 8]
 export const rejectMkPermit = async (
   token: string, 
   payload: { otp: string; full_name: string; remarks: string }

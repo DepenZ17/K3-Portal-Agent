@@ -14,7 +14,7 @@ import {
   uploadWorkPermitPhotos,
   deleteWorkPermitPhoto,
   deleteWorkPermitAttachment,
-  resendMkLink // <-- Ditambahkan untuk kirim ulang tautan MK
+  resendMkLink
 } from "../../services/workPermitServices";
 import type {
   WorkPermitDetail,
@@ -35,7 +35,7 @@ const isActionAllowed = (
   return false;
 };
 
-// Mengambil pesan error dari backend ({detail} atau {field: [...]}), 503 foto, atau error biasa (mis. GPS)
+// Mengambil pesan error dari backend
 const extractErrorMessage = (err: unknown, fallback: string): string => {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;
@@ -160,22 +160,19 @@ export default function WorkPermitDetailComponent() {
     });
   };
 
-  // Fungsi bantuan untuk memformat tanggal dan waktu secara seragam tanpa koma
   const formatDateTime = (dateString?: string | null) => {
-  if (!dateString) return "-";
-  const d = new Date(dateString);
-  const datePart = d.toLocaleDateString("id-ID"); // Contoh: 05/11/2026
-  const timePart = d.toLocaleTimeString("id-ID", { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit', 
-    hour12: false 
-  }).replace(/\./g, ':'); // Mengganti titik (.) menjadi titik dua (:)
-  
-  return `${datePart} ${timePart}`;
+    if (!dateString) return "-";
+    const d = new Date(dateString);
+    const datePart = d.toLocaleDateString("id-ID");
+    const timePart = d.toLocaleTimeString("id-ID", { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit', 
+      hour12: false 
+    }).replace(/\./g, ':');
+    return `${datePart} ${timePart}`;
   };
 
-  // 1. Action Submit
   const handleSubmitPermit = async () => {
     if (!id) return;
     resetMessages();
@@ -198,7 +195,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 2. Action Approve
   const handleApprove = async () => {
     if (!id) return;
     resetMessages();
@@ -225,7 +221,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 3. Action Reject
   const handleReject = async () => {
     if (!id) return;
     resetMessages();
@@ -247,7 +242,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 4. Action Cancel
   const handleCancel = async () => {
     if (!id) return;
     resetMessages();
@@ -269,7 +263,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 5. Action Request Close
   const handleRequestClose = async () => {
     if (!id) return;
     resetMessages();
@@ -303,7 +296,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 6. Action Confirm Close
   const handleConfirmClose = async () => {
     if (!id) return;
     resetMessages();
@@ -319,7 +311,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 7. Action Set Document Number
   const handleSetNumber = async () => {
     if (!id) return;
     resetMessages();
@@ -340,7 +331,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // 8. Handler Resend MK Link (Untuk Permit T & E)
   const handleResendMkLink = async () => {
     if (!id) return;
     resetMessages();
@@ -356,7 +346,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // Helper Hapus Foto
   const handleDeletePhoto = async (photoId: string | number) => {
     if (!id || !window.confirm("Apakah Anda yakin ingin menghapus foto ini?")) return;
     resetMessages();
@@ -369,7 +358,6 @@ export default function WorkPermitDetailComponent() {
     }
   };
 
-  // Helper Hapus Lampiran PDF
   const handleDeleteAttachment = async (attachmentId: string | number) => {
     if (!id || !window.confirm("Apakah Anda yakin ingin menghapus lampiran ini?")) return;
     resetMessages();
@@ -403,7 +391,6 @@ export default function WorkPermitDetailComponent() {
   }
 
   const can = (key: WorkPermitAllowedAction) => isActionAllowed(permit.allowed_actions, key);
-  const decideRequiresLocation = can("decide_requires_location");
   const beforePhotos = permit.photos?.filter((p) => p.stage === "before") || [];
   const afterPhotos = permit.photos?.filter((p) => p.stage === "after") || [];
 
@@ -475,90 +462,82 @@ export default function WorkPermitDetailComponent() {
           <div className="d-flex flex-wrap gap-2 mb-4 p-3 bg-light rounded shadow-sm align-items-center justify-content-between">
             <span className="fw-semibold small text-muted">Aksi Tersedia:</span>
             <div className="d-flex flex-wrap gap-2">
-            {/* Tombol Edit Draft */}
-            {can("can_edit") && (
-            <button 
-            className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" 
-            onClick={() => navigate(`/work-permit/${permit.id}/edit`)}
-            >
-            <i className="bi bi-pencil-square"></i> Edit Draft
-            </button>
-            )}
+              {can("can_edit") && (
+                <button 
+                  className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" 
+                  onClick={() => navigate(`/work-permit/${permit.id}/edit`)}
+                >
+                  <i className="bi bi-pencil-square"></i> Edit Draft
+                </button>
+              )}
 
-            {/* Tombol Submit */}
-            {can("can_submit") && (
-            <button 
-            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
-            onClick={handleSubmitPermit} 
-            disabled={actionLoading}
-            >
-            <i className="bi bi-send-check"></i>
-            {actionLoading ? "Memproses GPS & Submit..." : "Submit Permohonan"}
-            </button>
-            )}
+              {can("can_submit") && (
+                <button 
+                  className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+                  onClick={handleSubmitPermit} 
+                  disabled={actionLoading}
+                >
+                  <i className="bi bi-send-check"></i>
+                  {actionLoading ? "Memproses GPS & Submit..." : "Submit Permohonan"}
+                </button>
+              )}
 
-            {/* Tombol Approve & Reject */}
-            {can("can_decide") && (
-            <>
-            <button 
-            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
-            onClick={() => { resetMessages(); setActiveModal("approve"); }}
-            >
-            <i className="bi bi-check-circle-fill"></i> Setujui (Approve)
-            </button>
-            <button 
-            className="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" 
-            onClick={() => { resetMessages(); setActiveModal("reject"); }}
-            >
-            <i className="bi bi-x-circle-fill"></i> Tolak (Reject)
-            </button>
-            </>
-            )}
+              {can("can_decide") && (
+                <>
+                  <button 
+                    className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+                    onClick={() => { resetMessages(); setActiveModal("approve"); }}
+                  >
+                    <i className="bi bi-check-circle-fill"></i> Setujui (Approve)
+                  </button>
+                  <button 
+                    className="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" 
+                    onClick={() => { resetMessages(); setActiveModal("reject"); }}
+                  >
+                    <i className="bi bi-x-circle-fill"></i> Tolak (Reject)
+                  </button>
+                </>
+              )}
 
-            {/* Tombol Set Nomor Dokumen */}
-            {can("can_set_number") && (
-            <button 
-            className="btn btn-info btn-sm text-white d-flex align-items-center gap-1 shadow-sm" 
-            onClick={() => { resetMessages(); setActiveModal("set-number"); }}
-            >
-            <i className="bi bi-hash"></i> Set Nomor Dokumen
-            </button>
-            )}
+              {can("can_set_number") && (
+                <button 
+                  className="btn btn-info btn-sm text-white d-flex align-items-center gap-1 shadow-sm" 
+                  onClick={() => { resetMessages(); setActiveModal("set-number"); }}
+                >
+                  <i className="bi bi-hash"></i> Set Nomor Dokumen
+                </button>
+              )}
 
-            {/* Tombol Ajukan Penutupan */}
-            {can("can_request_close") && (
-            <button 
-            className="btn btn-warning btn-sm d-flex align-items-center gap-1 text-dark fw-semibold shadow-sm" 
-            onClick={() => { resetMessages(); setActiveModal("close"); }}
-            >
-            <i className="bi bi-flag-fill"></i> Ajukan Penutupan (Close)
-            </button>
-            )}
+              {can("can_request_close") && (
+                <button 
+                  className="btn btn-warning btn-sm d-flex align-items-center gap-1 text-dark fw-semibold shadow-sm" 
+                  onClick={() => { resetMessages(); setActiveModal("close"); }}
+                >
+                  <i className="bi bi-flag-fill"></i> Ajukan Penutupan (Close)
+                </button>
+              )}
 
-            {/* Tombol Konfirmasi Penutupan */}
-            {can("can_confirm_close") && (
-            <button 
-            className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
-            onClick={handleConfirmClose} 
-            disabled={actionLoading}
-            >
-            <i className="bi bi-check2-all"></i> Konfirmasi Penutupan
-            </button>
-            )}
+              {can("can_confirm_close") && (
+                <button 
+                  className="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-sm" 
+                  onClick={handleConfirmClose} 
+                  disabled={actionLoading}
+                >
+                  <i className="bi bi-check2-all"></i> Konfirmasi Penutupan
+                </button>
+              )}
 
-            {/* Tombol Batalkan / Cancel */}
-            {can("can_cancel") && (
-            <button 
-            className="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" 
-            onClick={() => { resetMessages(); setActiveModal("cancel"); }}
-            >
-            <i className="bi bi-slash-circle"></i> Batalkan
-            </button>
-            )}
+              {can("can_cancel") && (
+                <button 
+                  className="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" 
+                  onClick={() => { resetMessages(); setActiveModal("cancel"); }}
+                >
+                  <i className="bi bi-slash-circle"></i> Batalkan
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Panel Khusus Status Manajemen Konstruksi (MK) untuk Permit T & E */}
           {permit.status === "pending_mk" && (
             <div className="card shadow-sm border mb-4 bg-white">
               <div className="card-body p-4">
@@ -580,44 +559,43 @@ export default function WorkPermitDetailComponent() {
 
                 {permit.mk_requests && permit.mk_requests.length > 0 ? (
                   <div className="table-responsive">
-                  <table className="table table-sm table-bordered align-middle mb-0">
-                  <thead className="table-light small">
-                  <tr>
-                  <th>Kontak MK</th>
-                  <th>Email (Masked)</th>
-                  <th>Status Tautan</th>
-                  <th>Kedaluwarsa</th>
-                  <th>Status Email</th>
-                  </tr>
-                  </thead>
-                  <tbody className="small">
-                  {permit.mk_requests.map((mk) => (
-                  <tr key={mk.id}>
-                  <td className="fw-semibold">{mk.contact_name}</td>
-                  <td>{mk.contact_email}</td>
-                  <td>
-                  <span className={`badge bg-${mk.state === 'active' ? 'success' : mk.state === 'expired' ? 'danger' : 'secondary'} text-uppercase`}>
-                  {mk.state}
-                  </span>
-                  </td>
-                  {/* Menggunakan fungsi formatDateTime tanpa tanda koma */}
-                  <td>{formatDateTime(mk.expires_at)}</td>
-                  <td>
-                  {mk.email_error ? (
-                  <span className="text-danger" title={mk.email_error}>Gagal Kirim</span>
-                  ) : mk.email_sent ? (
-                  <span className="text-success">
-                Terkirim ({formatDateTime(mk.email_sent_at).split(" ")[1]})
-              </span>
-              ) : (
-              <span className="text-muted">Menunggu</span>
-            )}
-          </td>
-          </tr>
-              ))}
-              </tbody>
-              </table>
-              </div>
+                    <table className="table table-sm table-bordered align-middle mb-0">
+                      <thead className="table-light small">
+                        <tr>
+                          <th>Kontak MK</th>
+                          <th>Email (Masked)</th>
+                          <th>Status Tautan</th>
+                          <th>Kedaluwarsa</th>
+                          <th>Status Email</th>
+                        </tr>
+                      </thead>
+                      <tbody className="small">
+                        {permit.mk_requests.map((mk) => (
+                          <tr key={mk.id}>
+                            <td className="fw-semibold">{mk.contact_name}</td>
+                            <td>{mk.contact_email}</td>
+                            <td>
+                              <span className={`badge bg-${mk.state === 'active' ? 'success' : mk.state === 'expired' ? 'danger' : 'secondary'} text-uppercase`}>
+                                {mk.state}
+                              </span>
+                            </td>
+                            <td>{formatDateTime(mk.expires_at)}</td>
+                            <td>
+                              {mk.email_error ? (
+                                <span className="text-danger" title={mk.email_error}>Gagal Kirim</span>
+                              ) : mk.email_sent ? (
+                                <span className="text-success">
+                                  Terkirim ({formatDateTime(mk.email_sent_at).split(" ")[1]})
+                                </span>
+                              ) : (
+                                <span className="text-muted">Menunggu</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <p className="text-muted small mb-0">Belum ada permintaan MK yang diinisiasi untuk putaran ini.</p>
                 )}
@@ -809,17 +787,20 @@ export default function WorkPermitDetailComponent() {
           <div className="row g-4 mb-4">
             <div className="col-md-6">
               <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Area Keselamatan (Safety Areas)</h5>
-              <ul className="list-group">
-                {permit.safety_areas?.map((area, idx) => (
-                  <li key={idx} className="list-group-item py-1">Area Kode: <strong>{area}</strong></li>
+              <ul className="list-group mb-4">
+                {permit.safety_areas?.map((areaCode, idx) => (
+                  <li key={idx} className="list-group-item py-2">
+                    <strong>[{areaCode}]</strong> Area Keselamatan Terpilih
+                  </li>
                 ))}
               </ul>
             </div>
+            
             <div className="col-md-6">
-              <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Alat Pelindung Diri (PPE / APD)</h5>
+              <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Alat Pelindung Diri (PPE)</h5>
               <div className="d-flex flex-wrap gap-1 mb-2">
-                {permit.ppe?.map((item, idx) => (
-                  <span key={idx} className="badge bg-secondary">{item}</span>
+                {permit.ppe?.map((pKey, idx) => (
+                  <span key={idx} className="badge bg-secondary text-uppercase">{pKey}</span>
                 ))}
               </div>
               {permit.ppe_other && permit.ppe_other.length > 0 && (
@@ -830,118 +811,113 @@ export default function WorkPermitDetailComponent() {
             </div>
           </div>
 
-          {permit.approvals && permit.approvals.length > 0 && (
-            <div className="mb-4">
-              <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Riwayat Keputusan (Approval History)</h5>
-              <div className="table-responsive">
-                <table className="table table-sm table-bordered align-middle">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Tahapan</th>
-                      <th>Keputusan</th>
-                      <th>Oleh</th>
-                      <th>Catatan / Remarks</th>
-                      <th>Waktu</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {permit.approvals.map((app, idx) => (
-                      <tr key={idx}>
-                        <td className="fw-bold text-uppercase">{app.step.replace('_', ' ')}</td>
-                        <td>
-                          <span className={`badge bg-${app.decision === 'approved' ? 'success' : 'danger'}`}>
-                            {app.decision}
-                          </span>
-                        </td>
-                        <td>{app.decided_by?.full_name || "-"}</td>
-                        <td>{app.remarks || "-"}</td>
-                        <td className="small text-muted">{app.decided_at ? formatDateTime(app.decided_at) : "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
         </div>
       </div>
 
+      {/* MODAL APPROVAL / REJECT / CANCEL / CLOSE / SET NUMBER */}
       {activeModal && (
         <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title text-capitalize">Formulir Aksi: {activeModal.replace('-', ' ')}</h5>
+                <h5 className="modal-title fw-bold">
+                  {activeModal === "approve" && "Setujui Izin Kerja"}
+                  {activeModal === "reject" && "Tolak Izin Kerja"}
+                  {activeModal === "cancel" && "Batalkan Izin Kerja"}
+                  {activeModal === "close" && "Ajukan Penutupan Izin Kerja"}
+                  {activeModal === "set-number" && "Tetapkan Nomor Dokumen"}
+                </h5>
                 <button type="button" className="btn-close" onClick={closeModal}></button>
               </div>
               <div className="modal-body">
-                {errorMessage && <div className="alert alert-danger py-2 small">{errorMessage}</div>}
+                {errorMessage && <div className="alert alert-danger small">{errorMessage}</div>}
 
-                {activeModal === 'approve' && (
-                  <>
-                    {decideRequiresLocation && (
-                      <div className="alert alert-info py-2 small">
-                        Lokasi GPS Anda akan diambil saat menyetujui (wajib untuk tahap ini).
-                      </div>
-                    )}
-                    <div className="mb-3">
-                      <label className="form-label" htmlFor="approve-remarks">Catatan Persetujuan (Opsional):</label>
-                      <textarea id="approve-remarks" name="remarks" className="form-control" rows={3} value={remarksInput} onChange={(e) => setRemarksInput(e.target.value)} placeholder="Tulis catatan jika ada..."></textarea>
-                    </div>
-                  </>
-                )}
-                {activeModal === 'reject' && (
+                {(activeModal === "approve" || activeModal === "reject") && (
                   <div className="mb-3">
-                    <label className="form-label text-danger fw-bold" htmlFor="reject-remarks">Alasan Penolakan (Wajib)*:</label>
-                    <textarea id="reject-remarks" name="remarks" className="form-control" rows={3} value={remarksInput} onChange={(e) => setRemarksInput(e.target.value)} placeholder="Berikan alasan penolakan..."></textarea>
+                    <label className="form-label small fw-semibold">
+                      Catatan / Alasan {activeModal === "reject" ? "(Wajib)" : "(Opsional)"}:
+                    </label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={remarksInput}
+                      onChange={(e) => setRemarksInput(e.target.value)}
+                      placeholder="Masukkan catatan..."
+                    ></textarea>
                   </div>
                 )}
-                {activeModal === 'cancel' && (
+
+                {activeModal === "cancel" && (
                   <div className="mb-3">
-                    <label className="form-label text-danger fw-bold" htmlFor="cancel-reason">Alasan Pembatalan (Wajib)*:</label>
-                    <textarea id="cancel-reason" name="reason" className="form-control" rows={3} value={cancelReasonInput} onChange={(e) => setCancelReasonInput(e.target.value)} placeholder="Alasan pembatalan izin kerja..."></textarea>
+                    <label className="form-label small fw-semibold">Alasan Pembatalan (Wajib):</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={cancelReasonInput}
+                      onChange={(e) => setCancelReasonInput(e.target.value)}
+                      placeholder="Masukkan alasan pembatalan..."
+                    ></textarea>
                   </div>
                 )}
-                {activeModal === 'close' && (
-                  <>
+
+                {activeModal === "close" && (
+                  <div>
                     <div className="mb-3">
-                      <label className="form-label fw-bold" htmlFor="close-evaluation">Evaluasi Pasca-Pekerjaan (Wajib)*:</label>
-                      <textarea id="close-evaluation" name="post_work_evaluation" className="form-control" rows={3} value={postWorkEvalInput} onChange={(e) => setPostWorkEvalInput(e.target.value)} placeholder="Hasil evaluasi setelah pekerjaan selesai..."></textarea>
+                      <label className="form-label small fw-semibold">Evaluasi Pasca-Pekerjaan (Wajib):</label>
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        value={postWorkEvalInput}
+                        onChange={(e) => setPostWorkEvalInput(e.target.value)}
+                        placeholder="Hasil evaluasi setelah pekerjaan selesai..."
+                      ></textarea>
                     </div>
                     <div className="mb-3">
-                      <label className="form-label fw-bold" htmlFor="close-after-photos">Unggah Foto Sesudah Kerja (After Photo)*:</label>
+                      <label className="form-label small fw-semibold">Unggah Foto Sesudah Kerja (After Photo)*:</label>
                       <input
                         key={afterInputKey}
-                        id="close-after-photos"
-                        name="photos"
                         type="file"
                         className="form-control"
-                        multiple
                         accept="image/jpeg,image/png,image/webp"
+                        multiple
                         onChange={(e) => setAfterPhotoFiles(Array.from(e.target.files || []))}
                       />
-                      <small className="text-muted d-block mt-1">
-                        Minimal satu foto. Format JPG/JPEG, PNG, WebP (maksimal 5 MB per file, maksimal 5 foto).
-                        {afterPhotos.length > 0 && ` Sudah terunggah: ${afterPhotos.length} foto.`}
-                      </small>
                     </div>
-                  </>
+                  </div>
                 )}
-                {activeModal === 'set-number' && (
+
+                {activeModal === "set-number" && (
                   <div className="mb-3">
-                    <label className="form-label fw-bold" htmlFor="doc-number">Nomor Dokumen (Wajib)*:</label>
-                    <input id="doc-number" name="document_number" type="text" className="form-control" value={docNumberInput} onChange={(e) => setDocNumberInput(e.target.value)} placeholder="Contoh: KPT/001/X/2026" />
+                    <label className="form-label small fw-semibold">Nomor Dokumen Resmi (Wajib):</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={docNumberInput}
+                      onChange={(e) => setDocNumberInput(e.target.value)}
+                      placeholder="Contoh: KPT-12/SHE/2026"
+                    />
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={closeModal}>Batal</button>
-                {activeModal === 'approve' && <button type="button" className="btn btn-success btn-sm" onClick={handleApprove} disabled={actionLoading}>{actionLoading ? "Memproses..." : "Setujui"}</button>}
-                {activeModal === 'reject' && <button type="button" className="btn btn-danger btn-sm" onClick={handleReject} disabled={actionLoading}>Tolak</button>}
-                {activeModal === 'cancel' && <button type="button" className="btn btn-dark btn-sm" onClick={handleCancel} disabled={actionLoading}>Batalkan</button>}
-                {activeModal === 'close' && <button type="button" className="btn btn-warning btn-sm" onClick={handleRequestClose} disabled={actionLoading}>{actionLoading ? "Memproses..." : "Kirim Pengajuan"}</button>}
-                {activeModal === 'set-number' && <button type="button" className="btn btn-info text-white btn-sm" onClick={handleSetNumber} disabled={actionLoading}>Simpan Nomor</button>}
+                <button type="button" className="btn btn-secondary btn-sm" onClick={closeModal} disabled={actionLoading}>
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${activeModal === 'reject' || activeModal === 'cancel' ? 'btn-danger' : 'btn-success'}`}
+                  onClick={() => {
+                    if (activeModal === "approve") handleApprove();
+                    else if (activeModal === "reject") handleReject();
+                    else if (activeModal === "cancel") handleCancel();
+                    else if (activeModal === "close") handleRequestClose();
+                    else if (activeModal === "set-number") handleSetNumber();
+                  }}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? <span className="spinner-border spinner-border-sm me-1"></span> : null}
+                  Konfirmasi
+                </button>
               </div>
             </div>
           </div>

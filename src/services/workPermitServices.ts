@@ -12,12 +12,35 @@ import type {
 
 const BASE_URL = "/permits";
 
-// Tambahkan interface ini (bisa ditaruh di workPermit.ts atau langsung di sini)
+// Interface untuk struktur respons terpaginasi
 export interface PaginatedWorkPermitResponse {
   count: number;
   next?: string | null;
   previous?: string | null;
   results: WorkPermitListItem[];
+}
+
+// Interface untuk item dokumen HIRA yang dikembalikan oleh endpoint HIRA Options Picker
+export interface HiraOptionItem {
+  id: number;
+  work_package: string;
+  work_area: string;
+  document_number: string | null;
+  document_date: string | null;
+  created_by_name: string;
+  mine: boolean;
+  groups: Array<{
+    id: number;
+    location_function: string;
+    applicable_regulation: string;
+    order: number;
+    activities: Array<{
+      id: number;
+      activity_name: string;
+      potential_hazard: string;
+      initial_category: string;
+    }>;
+  }>;
 }
 
 // 1. Get List Work Permits (Mendukung filter query & paginasi)
@@ -41,24 +64,23 @@ export const getWorkPermitFormSchema = async (type: PermitType = "working_at_hei
   }
 };
 
-// 3. Create Work Permit (JSON). Foto diunggah terpisah lewat uploadWorkPermitPhotos.
+// 3. Create Work Permit (JSON)
 export const createWorkPermit = async (payload: WorkPermitPayload): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/`, payload);
   return response.data;
 };
 
-// Fungsi untuk mengambil dokumen HIRA yang disetujui per proyek
-export const getApprovedHiraDocumentsByProject = async (projectId: number | string) => {
+// Mengambil seluruh dokumen HIRA yang approved dalam proyek via Endpoint HIRA Options Picker
+export const getApprovedHiraDocumentsByProject = async (projectId: number | string): Promise<HiraOptionItem[]> => {
   try {
-    const response = await api.get(`/hira/documents/`, {
+    const response = await api.get(`${BASE_URL}/hira-options/`, {
       params: {
         project: projectId,
-        status: "approved",
       },
     });
     return response.data;
   } catch {
-    console.warn("Gagal memuat dokumen HIRA berdasarkan proyek.");
+    console.warn("Gagal memuat opsi HIRA berdasarkan proyek.");
     return [];
   }
 };
@@ -87,7 +109,7 @@ export const deleteWorkPermit = async (id: string | number): Promise<void> => {
 // WORKFLOW & ACTION ENDPOINTS (/permits/{id}/<action>/)
 // ==========================================
 
-// Submit permit oleh creator (wajib lokasi + minimal 1 foto "before")
+// Submit permit oleh creator (wajib lokasi + minimal 1 foto "before", 1 medical PDF, 1 certificate PDF, 1 activity HIRA)
 export const submitWorkPermit = async (id: string | number, locationData: SubmitPermitPayload): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/${id}/submit/`, locationData);
   return response.data;
@@ -138,7 +160,6 @@ export const setWorkPermitNumber = async (id: string | number, documentNumber: s
 // ==========================================
 
 // Upload foto bukti lapangan (JPEG/PNG/WebP, maks 5 MB per file, maks 5 per stage)
-// "before": saat draft/rejected. "after": saat approved, sebelum request-close.
 export const uploadWorkPermitPhotos = async (
   id: string | number,
   stage: "before" | "after",
@@ -159,7 +180,7 @@ export const uploadWorkPermitPhotos = async (
   return response.data;
 };
 
-// Hapus foto bukti lapangan berdasarkan ID foto (aturan status sama dengan upload)
+// Hapus foto bukti lapangan berdasarkan ID foto
 export const deleteWorkPermitPhoto = async (id: string | number, photoId: string | number): Promise<void> => {
   await api.delete(`${BASE_URL}/${id}/photos/${photoId}/`);
 };

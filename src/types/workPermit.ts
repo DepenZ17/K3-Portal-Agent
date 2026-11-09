@@ -210,7 +210,7 @@ export interface WorkPermitListItem {
   work_description: string;
   status: WorkPermitStatus;
   risk_category: RiskCategory | null;
-  highest_initial_category?: RiskCategory | null; // <-- Tambahkan ini jika backend mengirimkannya di list
+  highest_initial_category?: RiskCategory | null; 
   submission_round: number;
   created_by?: UserRef;
   created_at: string;
@@ -241,7 +241,7 @@ export interface WorkPermitDetail extends WorkPermitListItem {
   } | null;
 
   attachments?: PermitAttachment[]; // Daftar lampiran dokumen PDF
-  photos?: PermitPhoto[];           // Foto bukti lapangan
+  photos?: PermitPhoto[];          // Foto bukti lapangan
   geo_stamps?: PermitGeoStamp[];    // Rekaman jejak lokasi GPS
 
   equipment_used?: string;
@@ -280,10 +280,11 @@ export type WorkPermitAllowedAction =
   | "can_request_close"
   | "can_confirm_close"
   | "can_set_number"
+  | "can_manage_attachments"       // <-- Ditambahkan sesuai spesifikasi aksi baru[cite: 8]
   | "can_upload_before_photos"
   | "can_upload_after_photos"
   | "decide_requires_location"
-  | "can_resend_mk_link"; // <-- Pastikan ini ada
+  | "can_resend_mk_link";
 
 /** Parameter query filter untuk pencarian dan pemfilteran daftar Work Permits */
 export interface WorkPermitListParams {

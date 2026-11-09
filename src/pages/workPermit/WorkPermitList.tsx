@@ -46,8 +46,6 @@ export default function WorkPermitList() {
 
       const data = await getWorkPermits(params);
       
-      // Menangani format respons paginasi standar ({ count, results }) maupun array langsung
-      // Tangani format paginasi DRF atau array langsung
       if (Array.isArray(data)) {
         setPermits(data);
         setTotalItems(data.length);
@@ -97,7 +95,6 @@ export default function WorkPermitList() {
   };
 
   // Helper Badge Risk Category
-  // Menjadi seperti ini:
   const renderRiskBadge = (category?: RiskCategory | string | null) => {
     const colorMap: Record<string, { bg: string; color: string }> = {
       R: { bg: "#198754", color: "#fff" },
@@ -130,6 +127,7 @@ export default function WorkPermitList() {
           <h2 className="fw-bold text-dark mb-1">Izin Kerja di Ketinggian (Working at Height)</h2>
           <p className="text-muted mb-0">Kelola dan pantau izin kerja berisiko tinggi di area ketinggian.</p>
         </div>
+        {/* Dikembalikan mengarah ke /work-permit (workpermitmenu) */}
         <Link to="/work-permit" className="btn btn-success fw-semibold">
           + Buat Izin Kerja Baru
         </Link>
@@ -147,7 +145,7 @@ export default function WorkPermitList() {
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
-                setPage(1); // Reset ke halaman 1 saat filter berubah
+                setPage(1);
               }}
             >
               <option value="">Semua Status</option>
@@ -173,7 +171,7 @@ export default function WorkPermitList() {
               value={selectedRisk}
               onChange={(e) => {
                 setSelectedRisk(e.target.value);
-                setPage(1); // Reset ke halaman 1 saat filter berubah
+                setPage(1);
               }}
             >
               <option value="">Semua Risiko</option>
@@ -252,7 +250,7 @@ export default function WorkPermitList() {
           </table>
         </div>
 
-        {/* Footer & Paginasi (Sama persis seperti di AuditTrail) */}
+        {/* Footer & Paginasi */}
         {!loading && totalPages > 1 && (
           <div className="card-footer bg-white border-0 d-flex flex-column flex-md-row justify-content-between align-items-center py-3 px-3">
             <small className="text-muted mb-2 mb-md-0">

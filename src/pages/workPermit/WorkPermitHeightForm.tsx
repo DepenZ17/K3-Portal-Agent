@@ -10,7 +10,8 @@ import {
   getWorkPermitFormSchema, 
   submitWorkPermit,
   uploadWorkPermitPhotos,
-  uploadWorkPermitAttachments
+  uploadWorkPermitAttachments,
+  getApprovedHiraDocumentsByProject
 } from "../../services/workPermitServices";
 import type {
   HeightChecklist,
@@ -18,23 +19,13 @@ import type {
   WorkPermitDetail,
   GpsLocationData,
   PermitPhoto,
-  PermitHiraGroup,
   PermitAttachment,
 } from "../../types/workPermit";
+import type { HiraOptionItem } from "../../services/workPermitServices";
 
 interface ProjectOption {
   id: number;
   name: string;
-}
-
-interface HiraDocumentOption {
-  id: number;
-  document_number?: string | null;
-  work_package: string;
-  work_area: string;
-  project: number;
-  status: string;
-  groups?: PermitHiraGroup[];
 }
 
 export default function WorkPermitHeightForm() {
@@ -46,7 +37,6 @@ export default function WorkPermitHeightForm() {
 
   // Form Field States
   const [projectId, setProjectId] = useState<number | "">("");
-  const [hiraDocumentId, setHiraDocumentId] = useState<number | "">("");
   const [selectedActivityIds, setSelectedActivityIds] = useState<number[]>([]);
   const [workDate, setWorkDate] = useState<string>("");
   const [workStart, setWorkStart] = useState<string>("08:00");
@@ -84,7 +74,7 @@ export default function WorkPermitHeightForm() {
 
   // Dropdown Options from Backend
   const [projects, setProjects] = useState<ProjectOption[]>([]);
-  const [availableHiraDocs, setAvailableHiraDocs] = useState<HiraDocumentOption[]>([]);
+  const [availableHiraDocs, setAvailableHiraDocs] = useState<HiraOptionItem[]>([]);
   const [availableSafetyAreas, setAvailableSafetyAreas] = useState<{ code: string; name: string }[]>([]);
   const [availablePpeOptions, setAvailablePpeOptions] = useState<{ key: string; name: string }[]>([]);
 
@@ -182,7 +172,6 @@ export default function WorkPermitHeightForm() {
         if (isEditMode && id) {
           const detail = await getWorkPermitById(id);
           setProjectId(detail.project);
-          setHiraDocumentId(detail.hira_document || "");
           setSelectedActivityIds(detail.hira_activity_ids || []);
           setWorkDate(detail.work_date);
           setWorkStart(detail.work_start);
@@ -207,7 +196,8 @@ export default function WorkPermitHeightForm() {
             setChecklist(detail.checklist as HeightChecklist);
           }
           if (detail.project) {
-            fetchHiraDocuments(detail.project);
+            const hiraOpts = await getApprovedHiraDocumentsByProject(detail.project);
+            setAvailableHiraDocs(hiraOpts);
           }
         }
       } catch (err: unknown) {
@@ -224,47 +214,16 @@ export default function WorkPermitHeightForm() {
     initForm();
   }, [isEditMode, id]);
 
-  const fetchHiraDocuments = async (projId: number | string) => {
-    try {
-      const res = await api.get(`/hira/documents/`, {
-        params: { project: projId, status: "approved" }
-      });
-      const listData = Array.isArray(res.data) ? res.data : res.data?.results || [];
-      
-      const detailedDocs = await Promise.all(
-        listData.map(async (doc: { id: number }) => {
-          try {
-            const detailRes = await api.get(`/hira/documents/${doc.id}/`);
-            return detailRes.data;
-          } catch {
-            return doc;
-          }
-        })
-      );
-
-      setAvailableHiraDocs(detailedDocs);
-    } catch (err) {
-      console.error("Gagal memuat HIRA:", err);
-      setAvailableHiraDocs([]);
-    }
-  };
-
-  const handleProjectChange = (selectedProjId: string) => {
+  const handleProjectChange = async (selectedProjId: string) => {
     const numId = selectedProjId ? Number(selectedProjId) : "";
     setProjectId(numId);
-    setHiraDocumentId("");
     setSelectedActivityIds([]);
     setAvailableHiraDocs([]);
 
     if (numId) {
-      fetchHiraDocuments(numId);
+      const hiraOpts = await getApprovedHiraDocumentsByProject(numId);
+      setAvailableHiraDocs(hiraOpts);
     }
-  };
-
-  const handleHiraDocumentChange = (docId: string) => {
-    const numId = docId ? Number(docId) : "";
-    setHiraDocumentId(numId);
-    setSelectedActivityIds([]);
   };
 
   const handleActivityToggle = (actId: number) => {
@@ -273,7 +232,7 @@ export default function WorkPermitHeightForm() {
         return prev.filter((id) => id !== actId);
       } else {
         if (prev.length >= 10) {
-          alert("Maksimal 10 aktivitas HIRA yang dapat dipilih.");
+          alert("Maksimal 10 aktivitas HIRA yang dapat dipilih di seluruh dokumen.");
           return prev;
         }
         return [...prev, actId];
@@ -307,8 +266,6 @@ export default function WorkPermitHeightForm() {
     }
   };
 
-  const selectedHiraDoc = availableHiraDocs.find((doc) => doc.id === hiraDocumentId);
-
   const handleSubmit = async (shouldSubmit: boolean = false) => {
     setLoading(true);
     setErrorMessage("");
@@ -320,8 +277,8 @@ export default function WorkPermitHeightForm() {
     }
 
     if (shouldSubmit) {
-      if (!hiraDocumentId || selectedActivityIds.length === 0) {
-        setErrorMessage("Dokumen HIRA dan minimal satu aktivitas HIRA wajib dipilih untuk melakukan submit.");
+      if (selectedActivityIds.length === 0) {
+        setErrorMessage("Minimal satu aktivitas HIRA wajib dipilih untuk melakukan submit.");
         setLoading(false);
         return;
       }
@@ -340,12 +297,21 @@ export default function WorkPermitHeightForm() {
         setLoading(false);
         return;
       }
+      if (!medicalFile && existingAttachments.filter(a => a.kind === "medical").length === 0) {
+        setErrorMessage("Minimal satu dokumen medis / MCU (PDF) wajib diunggah untuk melakukan submit.");
+        setLoading(false);
+        return;
+      }
+      if (!certificateFile && existingAttachments.filter(a => a.kind === "certificate").length === 0) {
+        setErrorMessage("Minimal satu sertifikat kompetensi (PDF) wajib diunggah untuk melakukan submit.");
+        setLoading(false);
+        return;
+      }
     }
 
     const payload: WorkPermitPayload = {
       project: Number(projectId),
       permit_type: "working_at_height",
-      hira_document: hiraDocumentId ? Number(hiraDocumentId) : null,
       hira_activity_ids: selectedActivityIds,
       work_date: workDate,
       work_start: workStart,
@@ -380,11 +346,13 @@ export default function WorkPermitHeightForm() {
       }
 
       if (medicalFile) {
-        await uploadWorkPermitAttachments(savedPermit.id, "medical", [medicalFile]);
+        const withAtt = await uploadWorkPermitAttachments(savedPermit.id, "medical", [medicalFile]);
+        setExistingAttachments(withAtt.attachments ?? []);
         setMedicalFile(null);
       }
       if (certificateFile) {
-        await uploadWorkPermitAttachments(savedPermit.id, "certificate", [certificateFile]);
+        const withAtt = await uploadWorkPermitAttachments(savedPermit.id, "certificate", [certificateFile]);
+        setExistingAttachments(withAtt.attachments ?? []);
         setCertificateFile(null);
       }
 
@@ -446,9 +414,9 @@ export default function WorkPermitHeightForm() {
 
         <div className="card-body p-4 p-md-5">
           
-          {/* 1. Project & HIRA Selection */}
+          {/* 1. Project & HIRA Picker Selection (Multiple documents & multiple activities) */}
           <div className="mb-4 p-3 bg-light rounded border-start border-primary border-4">
-            <h5 className="fw-bold text-dark mb-3">1. Referensi Proyek &amp; Dokumen HIRA</h5>
+            <h5 className="fw-bold text-dark mb-3">1. Referensi Proyek &amp; Pemilihan Aktivitas HIRA</h5>
             
             <div className="mb-3">
               <label className="form-label fw-semibold small">Pilih Proyek*:</label>
@@ -467,52 +435,97 @@ export default function WorkPermitHeightForm() {
               </select>
             </div>
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold small">Pilih Dokumen HIRA (Disetujui)*:</label>
-              <select
-                className="form-select"
-                value={hiraDocumentId}
-                onChange={(e) => handleHiraDocumentChange(e.target.value)}
-                disabled={!projectId}
-              >
-                <option value="">-- Pilih Dokumen HIRA --</option>
-                {availableHiraDocs.map((doc) => (
-                  <option key={doc.id} value={doc.id}>
-                    [Dok: {doc.document_number || doc.id}] - Paket: {doc.work_package} ({doc.work_area})
-                  </option>
-                ))}
-              </select>
-              <small className="text-muted">
-                {!projectId ? "Silakan pilih proyek terlebih dahulu." : "Hanya menampilkan dokumen HIRA berstatus approved."}
-              </small>
-            </div>
+            {projectId && (
+              <div className="mt-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="form-label fw-semibold text-primary mb-0">
+                    Pilih Aktivitas HIRA (Total Dipilih: {selectedActivityIds.length} / 10 Maksimal)*:
+                  </label>
+                  <span className="badge bg-secondary">
+                    {availableHiraDocs.length} Dokumen HIRA Tersedia
+                  </span>
+                </div>
+                <small className="text-muted d-block mb-3">
+                  Anda dapat mencentang beberapa aktivitas dari satu atau beberapa dokumen HIRA yang disetujui di proyek ini.
+                </small>
 
-            {selectedHiraDoc && selectedHiraDoc.groups && selectedHiraDoc.groups.length > 0 && (
-              <div className="mt-3 p-3 bg-white rounded border">
-                <label className="form-label fw-semibold text-primary mb-2">Pilih Aktivitas HIRA (Minimal 1, Maksimal 10)*:</label>
-                {selectedHiraDoc.groups.map((group, gIndex) => (
-                  <div key={group.id || gIndex} className="mb-3">
-                    <div className="fw-bold text-dark small bg-light p-2 rounded mb-2">
-                      Grup: {group.location_function}
-                    </div>
-                    <div className="d-flex flex-column gap-2 ps-2">
-                      {group.activities?.map((act) => (
-                        <div className="form-check" key={act.id}>
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id={`hira-act-${act.id}`}
-                            checked={act.id !== undefined && selectedActivityIds.includes(act.id)}
-                            onChange={() => act.id !== undefined && handleActivityToggle(act.id)}
-                          />
-                          <label className="form-check-label small" htmlFor={`hira-act-${act.id}`}>
-                            <strong>{act.activity_name}</strong> — Hazard: {act.potential_hazard} (Kategori Risiko: {act.initial_category || act.initial_score || 'N/A'})
-                          </label>
+                {availableHiraDocs.length > 0 ? (
+                  <div className="d-flex flex-column gap-3">
+                    {availableHiraDocs.map((doc) => (
+                      <div key={doc.id} className="card border shadow-sm">
+                        <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                          <div>
+                            <strong className="text-dark">
+                              [Dok: {doc.document_number || doc.id}] - {doc.work_package} ({doc.work_area})
+                            </strong>
+                            <div className="text-muted" style={{ fontSize: "11px" }}>
+                              Dibuat oleh: {doc.created_by_name || "Subkontraktor"} | Tanggal: {doc.document_date || "-"}
+                            </div>
+                          </div>
+                          {doc.mine && (
+                            <span className="badge bg-success" style={{ fontSize: "10px" }}>Milik Saya</span>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                        <div className="card-body bg-light p-3">
+                          {doc.groups && doc.groups.length > 0 ? (
+                            doc.groups.map((group, gIndex) => (
+                              <div key={group.id || gIndex} className="mb-3 ps-2 border-start border-3 border-secondary">
+                                <div className="fw-bold text-secondary small mb-2">
+                                  Grup: {group.location_function} {group.applicable_regulation ? `— Regulasi: ${group.applicable_regulation}` : ""}
+                                </div>
+                                <div className="d-flex flex-column gap-2">
+                                  {group.activities?.map((act) => {
+  const isSelected = selectedActivityIds.includes(act.id);
+  return (
+    <div 
+      key={act.id}
+      className={`d-flex justify-content-between align-items-center p-3 rounded border mb-2 transition-all ${
+        isSelected ? "border-primary bg-primary bg-opacity-10 shadow-sm" : "border-secondary-subtle bg-white"
+      }`}
+      style={{ cursor: "pointer" }}
+      onClick={() => handleActivityToggle(act.id)}
+    >
+      {/* Bagian Teks di sebelah kiri */}
+      <div className="pe-3">
+        <strong className="text-dark d-block mb-1">{act.activity_name}</strong>
+        <span className="text-muted small">Hazard: {act.potential_hazard}</span>
+        <div>
+          <span className="badge bg-info text-dark mt-1" style={{ fontSize: "10px" }}>
+            Risiko: {act.initial_category || 'N/A'}
+          </span>
+        </div>
+      </div>
+
+      {/* Checkbox di ujung kanan */}
+      <div className="form-check m-0">
+        <input
+          className="form-check-input"
+          type="checkbox"
+          style={{ width: "22px", height: "22px", cursor: "pointer" }}
+          id={`hira-act-${act.id}`}
+          checked={isSelected}
+          onChange={() => handleActivityToggle(act.id)}
+          onClick={(e) => e.stopPropagation()} // Mencegah double trigger dari div wrapper
+        />
+      </div>
+    </div>
+  );
+})}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-muted small mb-0">Tidak ada grup aktivitas pada dokumen ini.</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="alert alert-warning small mb-0">
+                    Tidak ada dokumen HIRA berstatus approved ditemukan pada proyek ini.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -587,7 +600,7 @@ export default function WorkPermitHeightForm() {
                 </button>
               </div>
               <small className="text-muted" style={{ fontSize: "11px" }}>
-                Akurasi wajib maksimal 50 meter.
+                Akurasi wajib Maksimal 50 meter.
               </small>
             </div>
           </div>
@@ -614,7 +627,7 @@ export default function WorkPermitHeightForm() {
                 onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
               />
               <small className="text-muted" style={{ fontSize: "11px" }}>
-                Wajib dilampirkan sebelum melakukan submit (JPG/JPEG, PNG, WebP maksimal 5 MB).
+                Wajib dilampirkan sebelum melakukan submit (JPG/JPEG, PNG, WebP Maksimal 5 MB).
                 {existingPhotos.filter((p) => p.stage === "before").length > 0 &&
                   ` Sudah terunggah: ${existingPhotos.filter((p) => p.stage === "before").length} foto.`}
               </small>
@@ -624,7 +637,7 @@ export default function WorkPermitHeightForm() {
           {/* Lampiran Dokumen PDF Wajib (Medical & Certificate) */}
           <div className="row g-3 mb-3">
             <div className="col-md-6">
-              <label className="form-label fw-semibold small">Dokumen Medis / MCU (PDF):</label>
+              <label className="form-label fw-semibold small">Dokumen Medis / MCU (PDF)*:</label>
               <input
                 type="file"
                 className="form-control"
@@ -632,14 +645,14 @@ export default function WorkPermitHeightForm() {
                 onChange={(e) => setMedicalFile(e.target.files?.[0] || null)}
               />
               <small className="text-muted" style={{ fontSize: "11px" }}>
-                Maksimal 10 file dengan ukuran 3 MB per file. 
+                Maksimal 10 file dengan ukuran 3 MB.
                 {existingAttachments.filter(a => a.kind === "medical").length > 0 && 
                   ` Sudah terunggah (${existingAttachments.filter(a => a.kind === "medical").length} file).`}
               </small>
             </div>
 
             <div className="col-md-6">
-              <label className="form-label fw-semibold small">Sertifikat Kompetensi / Pelatihan (PDF):</label>
+              <label className="form-label fw-semibold small">Sertifikat Kompetensi / Pelatihan (PDF)*:</label>
               <input
                 type="file"
                 className="form-control"
@@ -647,7 +660,7 @@ export default function WorkPermitHeightForm() {
                 onChange={(e) => setCertificateFile(e.target.files?.[0] || null)}
               />
               <small className="text-muted" style={{ fontSize: "11px" }}>
-                Maksimal 10 file dengan ukuran 3 MB per file. 
+                Maksimal 10 file dengan ukuran 3 MB.
                 {existingAttachments.filter(a => a.kind === "certificate").length > 0 && 
                   ` Sudah terunggah (${existingAttachments.filter(a => a.kind === "certificate").length} file).`}
               </small>
@@ -822,7 +835,8 @@ export default function WorkPermitHeightForm() {
               onClick={() => handleSubmit(true)}
               disabled={loading}
             >
-              {loading ? "Menyimpan..." : "Simpan & Submit Izin Kerja"}
+              {loading ? <span className="spinner-border spinner-border-sm me-2"></span> : null}
+              Submit Izin Kerja
             </button>
           </div>
 
