@@ -366,25 +366,23 @@ function App() {
             }
           />
 
-          {/* PRINT IZIN KERJA */}
-          <Route
-            path="/work-permit/:id/print"
-            element={
-              <ProtectedRoute
-                allowedRoles={[
-                  "subcontractor",
-                  "hse_officer",
-                  "hse_coordinator",
-                  "supervisor",
-                  "project_manager",
-                ]}
-              >
-                <AppLayout>
-                  <WorkPermitPrint />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
+        {/* CETAK IZIN KERJA (tanpa AppLayout: halaman bersih untuk dicetak) */}
+        <Route
+          path="/work-permit/:id/print"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "subcontractor",
+                "hse_officer",
+                "hse_coordinator",
+                "supervisor",
+                "project_manager",
+              ]}
+            >
+              <WorkPermitPrint />
+            </ProtectedRoute>
+          }
+        />
 
           {/* PUBLIC ROUTE - MK APPROVAL */}
           <Route

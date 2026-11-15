@@ -536,6 +536,15 @@ export default function WorkPermitDetailComponent() {
                 </button>
               )}
             </div>
+
+                            {/* Cetak: halaman khusus dibuka di tab baru */}
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => window.open(`/work-permit/${permit.id}/print`, "_blank", "noopener")}
+              >
+                🖨 Cetak
+              </button>
+
           </div>
 
           {permit.status === "pending_mk" && (

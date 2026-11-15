@@ -177,6 +177,7 @@ export interface WorkPermitApprovalHistory {
     name: string;
     email: string;
   } | null;
+  decided_by_name?: string | null;
   remarks?: string | null;
   submission_round: number;
   decided_at?: string | null;
