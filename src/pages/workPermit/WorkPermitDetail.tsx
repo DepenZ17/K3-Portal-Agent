@@ -537,13 +537,17 @@ export default function WorkPermitDetailComponent() {
               )}
             </div>
 
-                            {/* Cetak: halaman khusus dibuka di tab baru */}
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                onClick={() => window.open(`/work-permit/${permit.id}/print`, "_blank", "noopener")}
-              >
-                🖨 Cetak
-              </button>
+            {/* CETAK IZIN KERJA */}
+            <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() =>
+            navigate(`/work-permit/${permit.id}/print`)
+            }
+            >
+            <i className="bi bi-printer me-1"></i>
+            Cetak
+            </button>
 
           </div>
 

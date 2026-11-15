@@ -1,4 +1,4 @@
-// src/pages/public/MkApprovalPage.tsx
+// src/pages/MkApprovalPage.tsx
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
