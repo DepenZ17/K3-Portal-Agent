@@ -40,6 +40,25 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  // Inisialisasi Audio Notifikasi
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isInitialMount = useRef(true);
+  const prevUnreadCountRef = useRef<number>(0);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/notification.mp3");
+    audioRef.current.volume = 0.5;
+  }, []);
+
+  const playNotificationSound = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((error) => {
+        console.log("Audio diblokir browser sebelum ada interaksi klik:", error);
+      });
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -119,6 +138,19 @@ export default function Navbar() {
   // Hitung jumlah notifikasi yang belum dibaca (read_at === null) dan belum diselesaikan orang lain
   const unreadCount = notifications.filter((n) => !n.read_at && (n.needs_action !== false || !n.resolution_note)).length;
   
+  // Trigger suara saat ada notifikasi baru yang masuk (menghindari bunyi saat render pertama kali)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      prevUnreadCountRef.current = unreadCount;
+      return;
+    }
+    if (unreadCount > prevUnreadCountRef.current) {
+      playNotificationSound();
+    }
+    prevUnreadCountRef.current = unreadCount;
+  }, [unreadCount]);
+
   // Tutup dropdown notifikasi saat klik di luar area
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
