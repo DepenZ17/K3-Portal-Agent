@@ -46,7 +46,6 @@ export default function HiraList() {
         page_size: 10,
       });
 
-      // Menangani format respons paginasi standar ({ count, results }) maupun array langsung
       if (Array.isArray(data)) {
         setDocuments(data);
         setTotalItems(data.length);
@@ -93,15 +92,17 @@ export default function HiraList() {
   };
 
   return (
-    <div className="container py-4">
+    <div className="container-fluid py-4 px-3 px-md-4">
+      <style>{HIRA_LIST_CSS}</style>
+
       {/* Header & Button Create */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold mb-1">Daftar Dokumen HIRA</h2>
+          <h2 className="fw-bold mb-1 text-dark">Daftar Dokumen HIRA</h2>
           <p className="text-muted small mb-0">Hazard Identification and Risk Assessment</p>
         </div>
-        <Link to="/hira/create" className="btn btn-success fw-semibold shadow-sm">
-          + Buat HIRA Baru
+        <Link to="/hira/create" className="btn btn-success fw-semibold shadow-sm px-3 py-2">
+          <i className="bi bi-shield-plus me-1"></i> Buat HIRA Baru
         </Link>
       </div>
 
@@ -116,11 +117,11 @@ export default function HiraList() {
               <select
                 id="hira-filter-project"
                 name="project"
-                className="form-select"
+                className="form-select border-0 shadow-sm"
                 value={selectedProject}
                 onChange={(e) => {
                   setSelectedProject(e.target.value);
-                  setPage(1); // Reset ke halaman 1 saat filter berubah
+                  setPage(1);
                 }}
               >
                 <option value="">Semua Proyek</option>
@@ -138,11 +139,11 @@ export default function HiraList() {
               <select
                 id="hira-filter-status"
                 name="status"
-                className="form-select"
+                className="form-select border-0 shadow-sm"
                 value={selectedStatus}
                 onChange={(e) => {
                   setSelectedStatus(e.target.value);
-                  setPage(1); // Reset ke halaman 1 saat filter berubah
+                  setPage(1);
                 }}
               >
                 <option value="">Semua Status</option>
@@ -158,14 +159,14 @@ export default function HiraList() {
             {/* Button Reset Filter */}
             <div className="col-md-2 d-flex align-items-end">
               <button
-                className="btn btn-outline-secondary w-100 d-inline-flex align-items-center justify-content-center gap-2"
+                className="btn btn-outline-secondary w-100 d-inline-flex align-items-center justify-content-center gap-2 border-0 shadow-sm bg-white"
                 onClick={() => {
                   setSelectedProject("");
                   setSelectedStatus("");
                   setPage(1);
                 }}
               >
-                <i className="bi bi-arrow-counterclockwise"></i> Reset Filter
+                <i className="bi bi-arrow-counterclockwise"></i> Reset
               </button>
             </div>
 
@@ -175,7 +176,7 @@ export default function HiraList() {
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="alert alert-danger mb-4" role="alert">
+        <div className="alert alert-danger mb-4 shadow-sm border-0" role="alert">
           {errorMessage}
         </div>
       )}
@@ -184,7 +185,7 @@ export default function HiraList() {
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: 1100 }}>
-            <thead className="table-light border-bottom">
+            <thead className="table-light border-bottom text-uppercase fs-7 text-muted">
               <tr>
                 <th className="py-3 px-3" style={{ width: "13%" }}>No. Dokumen</th>
                 <th className="py-3 px-3" style={{ width: "25%" }}>Paket & Area Pekerjaan</th>
@@ -199,20 +200,19 @@ export default function HiraList() {
                 <tr>
                   <td colSpan={6} className="text-center py-5">
                     <div className="spinner-border text-success mb-2" role="status"></div>
-                    <p className="text-muted small mb-0">
-                      Memuat data HIRA dari server...
-                    </p>
+                    <p className="text-muted small mb-0">Memuat data HIRA dari server...</p>
                   </td>
                 </tr>
               ) : documents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-5 text-muted">
+                    <i className="bi bi-folder2-open fs-2 d-block mb-2 text-secondary opacity-50"></i>
                     Tidak ada dokumen HIRA ditemukan.
                   </td>
                 </tr>
               ) : (
                 documents.map((doc) => (
-                  <tr key={doc.id}>
+                  <tr key={doc.id} className="hira-row-item">
                     <td className="px-3 fw-semibold text-secondary">
                       {doc.document_number || <span className="text-muted fst-italic">Belum Diatur</span>}
                     </td>
@@ -221,14 +221,16 @@ export default function HiraList() {
                       <small className="text-muted d-block">
                         Area: {doc.work_area || "-"}
                       </small>
-                      <small className="text-muted">
+                      <small className="text-muted" style={{ fontSize: "11px" }}>
                         Rev Round: #{doc.submission_round}
                       </small>
                     </td>
-                    <td className="px-3">{doc.project_name}</td>
+                    <td className="px-3 text-truncate">{doc.project_name}</td>
                     <td className="px-3">
-                      <div>{doc.created_by.full_name}</div>
-                      <small className="text-muted text-capitalize">({doc.created_by.role})</small>
+                      <div className="text-dark fw-medium">{doc.created_by.full_name}</div>
+                      <small className="text-muted text-capitalize" style={{ fontSize: "11px" }}>
+                        {doc.created_by.role.replace("_", " ")}
+                      </small>
                     </td>
                     <td className="px-3 text-center">
                       {renderStatusBadge(doc.status)}
@@ -236,7 +238,7 @@ export default function HiraList() {
                     <td className="px-3 text-center">
                       <Link
                         to={`/hira/${doc.id}`}
-                        className="btn btn-sm btn-outline-primary fw-semibold"
+                        className="btn btn-sm btn-outline-success fw-semibold px-3"
                       >
                         Detail &rarr;
                       </Link>
@@ -258,19 +260,19 @@ export default function HiraList() {
             <nav>
               <ul className="pagination pagination-sm mb-0">
                 <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
-                  <button className="page-link me-1" onClick={() => setPage((p) => Math.max(p - 1, 1))}>
+                  <button className="page-link me-1 rounded-2" onClick={() => setPage((p) => Math.max(p - 1, 1))}>
                     &laquo; Prev
                   </button>
                 </li>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                   <li key={pageNum} className={`page-item ${page === pageNum ? "active" : ""}`}>
-                    <button className="page-link" onClick={() => setPage(pageNum)}>
+                    <button className="page-link rounded-2 mx-0.5" onClick={() => setPage(pageNum)}>
                       {pageNum}
                     </button>
                   </li>
                 ))}
                 <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
-                  <button className="page-link ms-1" onClick={() => setPage((p) => Math.min(p + 1, totalPages))}>
+                  <button className="page-link ms-1 rounded-2" onClick={() => setPage((p) => Math.min(p + 1, totalPages))}>
                     Next &raquo;
                   </button>
                 </li>
@@ -282,3 +284,26 @@ export default function HiraList() {
     </div>
   );
 }
+
+// Styling tambahan untuk konsistensi tema
+const HIRA_LIST_CSS = `
+  .hira-row-item {
+    transition: background-color 0.15s ease;
+  }
+  .hira-row-item:hover {
+    background-color: #f8fff9 !important;
+  }
+  .pagination .page-item.active .page-link {
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+    color: #fff !important;
+  }
+  .pagination .page-link {
+    color: #198754;
+    border: 1px solid #dee2e6;
+  }
+  .pagination .page-link:hover {
+    background-color: #e9ecef;
+    color: #0f5132;
+  }
+`;

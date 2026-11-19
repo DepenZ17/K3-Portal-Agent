@@ -7,6 +7,14 @@ import type { NotificationItem } from "../services/notificationServices";
 
 const POLL_INTERVAL_MS = 60000;
 
+const ROLE_LABELS: Record<string, string> = {
+  subcontractor: "Subkontraktor",
+  supervisor: "Supervisor",
+  hse_officer: "HSE Officer",
+  hse_coordinator: "HSE Coordinator",
+  project_manager: "Project Manager",
+};
+
 // Keterangan waktu singkat; lebih dari 7 hari tampil sebagai tanggal
 const formatRelative = (iso?: string): string => {
   if (!iso) return "";
@@ -20,27 +28,23 @@ const formatRelative = (iso?: string): string => {
   return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 };
 
-// Rangkai URL tujuan dari type dan resource_id (sesuai spesifikasi backend & dashboard)
+// Rangkai URL tujuan dari type dan resource_id
 const getNotificationRoute = (targetType: string, resourceId: number): string => {
   const type = targetType ? targetType.toLowerCase() : "";
   if (type.includes("permit") || type === "izin_kerja") return `/work-permit/${resourceId}`;
   if (type.includes("hira")) return `/hira/${resourceId}`;
-  return "/work-permit/list"; // Fallback default
+  return "/work-permit/list";
 };
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // State untuk Menu Navigasi Mobile
   const [isOpen, setIsOpen] = useState(false);
-
-  // State untuk Dropdown Notifikasi & Data dari Backend
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Inisialisasi Audio Notifikasi
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isInitialMount = useRef(true);
   const prevUnreadCountRef = useRef<number>(0);
@@ -64,24 +68,22 @@ export default function Navbar() {
     navigate("/login");
   };
 
-  // Dipakai dari event handler (saat lonceng dibuka)
   const fetchNotifications = useCallback(async () => {
     try {
       const data = await getNotifications();
-      setNotifications(data.results || []); // Ambil array results dari response paginasi
+      setNotifications(data.results || []);
     } catch (error) {
       console.error("Gagal memuat notifikasi:", error);
     }
   }, []);
 
-  // Polling aman menggunakan setTimeout rekursif (mencegah penumpukan request saat server lambat/pending)
+  // Polling aman dengan setTimeout rekursif
   useEffect(() => {
     let cancelled = false;
     let timerId: number;
 
     const load = async () => {
       if (cancelled) return;
-      
       try {
         const data = await getNotifications();
         if (!cancelled) {
@@ -90,7 +92,6 @@ export default function Navbar() {
       } catch (error) {
         console.error("Gagal memuat notifikasi:", error);
       } finally {
-        // Jadwalkan poll berikutnya HANYA SETELAH request ini selesai
         if (!cancelled) {
           timerId = window.setTimeout(() => {
             if (document.visibilityState === "visible") {
@@ -114,31 +115,27 @@ export default function Navbar() {
   const toggleNotif = () => {
     const next = !isNotifOpen;
     setIsNotifOpen(next);
-    if (next) fetchNotifications(); // data terbaru saat lonceng dibuka
+    if (next) fetchNotifications();
   };
 
-  // Handler saat item notifikasi diklik: pindah halaman dulu, penandaan dibaca tidak boleh menghalangi
   const handleNotificationClick = async (item: NotificationItem) => {
     setIsNotifOpen(false);
     setIsOpen(false);
-    navigate(getNotificationRoute(item.type, item.resource_id)); // Menggunakan type & resource_id
+    navigate(getNotificationRoute(item.type, item.resource_id));
 
     if (!item.read_at) {
-      // Perbarui tampilan langsung, lalu kabari backend
       setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
       try {
         await markNotificationAsRead(item.id);
       } catch (error) {
         console.error("Gagal menandai notifikasi dibaca:", error);
-        fetchNotifications(); // kembalikan ke kondisi server jika gagal
+        fetchNotifications();
       }
     }
   };
 
-  // Hitung jumlah notifikasi yang belum dibaca (read_at === null) dan belum diselesaikan orang lain
   const unreadCount = notifications.filter((n) => !n.read_at && (n.needs_action !== false || !n.resolution_note)).length;
   
-  // Trigger suara saat ada notifikasi baru yang masuk (menghindari bunyi saat render pertama kali)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -151,7 +148,6 @@ export default function Navbar() {
     prevUnreadCountRef.current = unreadCount;
   }, [unreadCount]);
 
-  // Tutup dropdown notifikasi saat klik di luar area
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -165,9 +161,7 @@ export default function Navbar() {
   }, []);
 
   const currentRole = user?.role || "";
-
   const isSubcontractor = currentRole === "subcontractor";
-
   const isK3Role = [
     "subcontractor",
     "hse_officer",
@@ -184,7 +178,6 @@ export default function Navbar() {
           <span className="fs-6 tracking-wide">AGENT PORTAL</span>
         </Link>
 
-        {/* Tombol Hamburger untuk Mobile */}
         <button
           className="navbar-toggler border-0"
           type="button"
@@ -224,11 +217,14 @@ export default function Navbar() {
               </li>
             )}
 
-            <li className="nav-item">
-              <Link className="nav-link px-2" to="/audit" onClick={() => setIsOpen(false)}>
-                Audit Log
-              </Link>
-            </li>
+            {/* Disamakan dengan Home.tsx: hanya tampil untuk K3 Role */}
+            {isK3Role && (
+              <li className="nav-item">
+                <Link className="nav-link px-2" to="/audit" onClick={() => setIsOpen(false)}>
+                  Audit Log
+                </Link>
+              </li>
+            )}
 
             <li className="nav-item">
               <Link className="nav-link px-2 text-nowrap" to="/rules" onClick={() => setIsOpen(false)}>
@@ -237,9 +233,7 @@ export default function Navbar() {
             </li>
           </ul>
 
-          {/* Area Kanan: Notifikasi, User Info & Logout */}
           <div className="d-flex align-items-center gap-2 pt-2 pt-lg-0 mt-2 mt-lg-0">
-
             {/* Bell Notifikasi */}
             <div className="dropdown position-relative" ref={notifRef}>
               <button
@@ -250,7 +244,7 @@ export default function Navbar() {
                 aria-label={`Notifikasi, ${unreadCount} belum dibaca`}
                 style={{ width: "36px", height: "36px", backgroundColor: "rgba(255, 255, 255, 0.2)" }}
               >
-                <span>🔔</span>
+                <i className="bi bi-bell-fill text-white"></i>
                 {unreadCount > 0 && (
                   <span
                     className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light"
@@ -271,8 +265,8 @@ export default function Navbar() {
 
                 {notifications.length > 0 ? (
                   notifications.slice(0, 10).map((item) => {
-                    const isUnread = !item.read_at; // Cek read_at bernilai null
-                    const isResolvedByOthers = !item.needs_action && item.resolution_note; // Kasus "Someone else already handled it"
+                    const isUnread = !item.read_at;
+                    const isResolvedByOthers = !item.needs_action && item.resolution_note;
 
                     return (
                       <li key={item.id}>
@@ -288,7 +282,6 @@ export default function Navbar() {
                           </div>
                           <div className="text-muted" style={{ fontSize: "11px" }}>{item.body}</div>
                           
-                          {/* Menampilkan catatan penyelesaian jika ditangani orang lain */}
                           {isResolvedByOthers && (
                             <div className="text-danger fst-italic mt-1" style={{ fontSize: "11px" }}>
                               <i className="bi bi-info-circle me-1"></i> {item.resolution_note}
@@ -321,10 +314,10 @@ export default function Navbar() {
                   {user.full_name}
                 </span>
                 <span
-                  className="badge bg-white text-success fw-bold text-uppercase px-2 py-1"
-                  style={{ fontSize: "9px", letterSpacing: "0.5px" }}
+                  className="badge bg-white text-success fw-bold px-2 py-1"
+                  style={{ fontSize: "10px" }}
                 >
-                  {user.role ? user.role.replace("_", " ") : ""}
+                  {ROLE_LABELS[currentRole] || currentRole}
                 </span>
               </div>
             )}
@@ -335,9 +328,8 @@ export default function Navbar() {
               onClick={handleLogout}
               style={{ backgroundColor: "#dc3545", borderColor: "#dc3545", fontSize: "13px" }}
             >
-              <span>Logout</span> 🚪
+              <span>Logout</span> <i className="bi bi-box-arrow-right"></i>
             </button>
-
           </div>
         </div>
       </div>

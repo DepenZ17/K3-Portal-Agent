@@ -289,17 +289,19 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
   const canSeeDetail = currentRole === "hse_officer" || currentRole === "hse_coordinator";
 
   return (
-    <div className={isTimelineMode ? "container-fluid py-2 px-0" : "container-fluid py-4 px-3 px-md-4"}>
+    <div className={isTimelineMode ? "container-fluid py-2 px-0" : "container-fluid py-3 py-md-4 px-2 px-md-4"}>
+      <style>{AUDIT_TRAIL_CSS}</style>
+
       {!isTimelineMode && (
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-2 border-bottom">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-2 border-bottom">
           <div>
-            <h2 className="h4 fw-bold text-dark mb-1">Audit Log</h2>
+            <h2 className="h4 fw-bold text-dark mb-1 fs-4 fs-md-3">Audit Log</h2>
             <p className="text-muted small mb-0">
               Riwayat aktivitas dan catatan perubahan sistem keselamatan kerja (HSE).
             </p>
           </div>
           <button
-            className="btn btn-outline-success btn-sm mt-3 mt-md-0 d-inline-flex align-items-center gap-2 align-self-start align-self-md-auto"
+            className="btn btn-outline-success btn-sm d-inline-flex align-items-center justify-content-center gap-2 shadow-sm px-3 py-2 text-nowrap align-self-start align-self-md-auto"
             onClick={fetchLogs}
             disabled={isLoading}
           >
@@ -309,7 +311,7 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
       )}
 
       {errorMessage && (
-        <div className="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <div className="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
           <small>{errorMessage}</small>
           <button
             type="button"
@@ -321,14 +323,14 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
 
       {!isTimelineMode && (
         <div className="card border-0 shadow-sm rounded-3 mb-4">
-          <div className="card-body p-3 p-md-4">
+          <div className="card-body bg-light rounded-3 p-3 p-md-4">
             <div className="row g-3">
               <div className="col-12 col-md-3">
-                <label htmlFor="audit-search" className="form-label fw-semibold text-secondary small">CARI KATA KUNCI</label>
+                <label htmlFor="audit-search" className="form-label fw-semibold text-secondary small mb-1">CARI KATA KUNCI</label>
                 <input
                   id="audit-search"
                   type="text"
-                  className="form-control form-control-sm bg-light"
+                  className="form-control form-control-sm border-0 shadow-sm"
                   placeholder="Cari kata kunci / ID..."
                   value={searchQuery}
                   onChange={(e) => {
@@ -339,10 +341,10 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               </div>
 
               <div className="col-6 col-md-2">
-                <label htmlFor="audit-action-filter" className="form-label fw-semibold text-secondary small">TIPE AKSI</label>
+                <label htmlFor="audit-action-filter" className="form-label fw-semibold text-secondary small mb-1">TIPE AKSI</label>
                 <select
                   id="audit-action-filter"
-                  className="form-select form-select-sm bg-light"
+                  className="form-select form-select-sm border-0 shadow-sm"
                   value={actionFilter}
                   onChange={(e) => {
                     setActionFilter(e.target.value);
@@ -364,10 +366,10 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               </div>
 
               <div className="col-6 col-md-3">
-                <label htmlFor="audit-resource-type" className="form-label fw-semibold text-secondary small">RESOURCE TYPE</label>
+                <label htmlFor="audit-resource-type" className="form-label fw-semibold text-secondary small mb-1">RESOURCE TYPE</label>
                 <select
                   id="audit-resource-type"
-                  className="form-select form-select-sm bg-light"
+                  className="form-select form-select-sm border-0 shadow-sm"
                   value={resourceTypeFilter}
                   onChange={(e) => {
                     setResourceTypeFilter(e.target.value);
@@ -384,11 +386,11 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               </div>
 
               <div className="col-6 col-md-2">
-                <label htmlFor="audit-date-from" className="form-label fw-semibold text-secondary small">DARI TANGGAL</label>
+                <label htmlFor="audit-date-from" className="form-label fw-semibold text-secondary small mb-1">DARI TANGGAL</label>
                 <input
                   id="audit-date-from"
                   type="date"
-                  className="form-control form-control-sm bg-light"
+                  className="form-control form-control-sm border-0 shadow-sm"
                   value={dateFrom}
                   onChange={(e) => {
                     setDateFrom(e.target.value);
@@ -398,11 +400,11 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               </div>
 
               <div className="col-6 col-md-2">
-                <label htmlFor="audit-date-to" className="form-label fw-semibold text-secondary small">SAMPAI TANGGAL</label>
+                <label htmlFor="audit-date-to" className="form-label fw-semibold text-secondary small mb-1">SAMPAI TANGGAL</label>
                 <input
                   id="audit-date-to"
                   type="date"
-                  className="form-control form-control-sm bg-light"
+                  className="form-control form-control-sm border-0 shadow-sm"
                   value={dateTo}
                   onChange={(e) => {
                     setDateTo(e.target.value);
@@ -416,7 +418,7 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
               <div className="mt-3 text-end">
                 <button
                   type="button"
-                  className="btn btn-link text-decoration-none btn-sm text-danger p-0"
+                  className="btn btn-link text-decoration-none btn-sm text-danger p-0 fw-semibold"
                   onClick={handleResetFilters}
                 >
                   &times; Reset Filter
@@ -427,11 +429,11 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
         </div>
       )}
 
-      {/* Tabel Audit Logs / Timeline dengan Kolom Terpisah */}
+      {/* Tabel Audit Logs / Timeline */}
       <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0" style={{ tableLayout: "fixed", minWidth: "900px" }}>
+            <table className="table table-hover align-middle mb-0" style={{ minWidth: "900px" }}>
               <thead className="table-light border-bottom">
                 <tr className="text-secondary small fw-bold text-uppercase">
                   <th className="py-3 px-3" style={{ width: "16%" }}>Waktu</th>
@@ -454,6 +456,7 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
                 ) : logs.length === 0 ? (
                   <tr>
                     <td colSpan={canSeeDetail ? 5 : 4} className="text-center py-5 text-muted">
+                      <i className="bi bi-clock-history fs-2 d-block mb-2 text-secondary opacity-50"></i>
                       Tidak ada riwayat aktivitas ditemukan.
                     </td>
                   </tr>
@@ -465,7 +468,7 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
                     const roleName = ROLE_LABELS[log.actor_role] || log.actor_role;
 
                     return (
-                      <tr key={log.id}>
+                      <tr key={log.id} className="audit-row-item">
                         {/* Kolom Waktu */}
                         <td className="px-3" title={new Date(log.timestamp).toLocaleString("id-ID")}>
                           <small className="fw-semibold text-dark">{formatDate(log.timestamp)}</small>
@@ -478,30 +481,29 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
 
                         {/* Kolom Pelaku */}
                         <td className="px-3">
-                          <div className="fw-semibold text-dark small text-truncate">{log.actor_name || "Sistem"}</div>
+                          <div className="fw-semibold text-dark small text-truncate" style={{ maxWidth: "150px" }}>{log.actor_name || "Sistem"}</div>
                           {roleName && (
-                            <div className="text-muted" style={{ fontSize: "11px" }}>{roleName}</div>
+                            <div className="text-muted text-truncate" style={{ fontSize: "11px", maxWidth: "150px" }}>{roleName}</div>
                           )}
                         </td>
 
-                        {/* Kolom Aksi (Badge) */}
+                        {/* Kolom Aksi */}
                         <td className="px-3">
-                          <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2 py-1`}>
+                          <span className={`badge ${getActionBadgeClass(log.action)} rounded-pill px-2.5 py-1 fw-medium text-nowrap`}>
                             {log.action_label || log.action}
                           </span>
                         </td>
 
-                        {/* Kolom Dokumen & Keterangan dengan Konteks Lengkap */}
+                        {/* Kolom Dokumen & Keterangan */}
                         <td className="px-3">
                           <div className="mb-1">
                             {canOpen ? (
                               <Link
                                 to={routeFor(log.resource_id)}
-                                className="fw-semibold small text-decoration-none text-primary"
+                                className="fw-semibold small text-decoration-none text-success"
                                 title="Buka dokumen"
                               >
                                 <i className="bi bi-file-earmark-text me-1"></i>
-                                {/* Menampilkan Tipe & ID Dokumen dengan jelas */}
                                 <span>{log.resource_label || "Dokumen"} #{log.resource_id}</span>
                                 {log.resource_title && (
                                   <span className="text-muted fw-normal ms-1">({log.resource_title})</span>
@@ -531,15 +533,15 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
                           )}
                         </td>
 
-                        {/* Kolom Detail (Hanya untuk HSE Officer & Coordinator) */}
+                        {/* Kolom Detail */}
                         {canSeeDetail && (
                           <td className="px-3 text-center">
                             <button
-                              className="btn btn-sm btn-outline-secondary px-3"
+                              className="btn btn-sm btn-outline-success px-2.5 py-1 fw-semibold text-nowrap"
                               onClick={() => handleOpenDetail(log)}
                               title="Lihat isi data saat aktivitas ini terjadi"
                             >
-                              <i className="bi bi-file-code"></i> Detail
+                              <i className="bi bi-file-code me-1"></i> Detail
                             </button>
                           </td>
                         )}
@@ -552,29 +554,29 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
           </div>
         </div>
 
-        {/* Footer & Paginasi */}
+        {/* Footer & Paginasi (Responsif tumpuk di HP) */}
         {!isLoading && totalPages > 1 && (
-          <div className="card-footer bg-white border-0 d-flex flex-column flex-md-row justify-content-between align-items-center py-3 px-3">
-            <small className="text-muted mb-2 mb-md-0">
+          <div className="card-footer bg-white border-0 d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 py-3 px-3">
+            <small className="text-muted mb-0 text-center text-md-start">
               Menampilkan {logs.length} dari total {totalItems} entri
             </small>
 
             <nav>
-              <ul className="pagination pagination-sm mb-0">
+              <ul className="pagination pagination-sm mb-0 justify-content-center">
                 <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
-                  <button className="page-link me-1" onClick={() => setPage((p) => Math.max(p - 1, 1))}>
+                  <button className="page-link me-1 rounded-2" onClick={() => setPage((p) => Math.max(p - 1, 1))}>
                     &laquo; Prev
                   </button>
                 </li>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                   <li key={pageNum} className={`page-item ${page === pageNum ? "active" : ""}`}>
-                    <button className="page-link" onClick={() => setPage(pageNum)}>
+                    <button className="page-link rounded-2 mx-0.5" onClick={() => setPage(pageNum)}>
                       {pageNum}
                     </button>
                   </li>
                 ))}
                 <li className={`page-item ${page === totalPages ? "disabled" : ""}`}>
-                  <button className="page-link ms-1" onClick={() => setPage((p) => Math.min(p + 1, totalPages))}>
+                  <button className="page-link ms-1 rounded-2" onClick={() => setPage((p) => Math.min(p + 1, totalPages))}>
                     Next &raquo;
                   </button>
                 </li>
@@ -586,11 +588,11 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
 
       {/* Modal Detail Data (Snapshot) */}
       {selectedSnapshot && (
-        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}>
+        <div className="modal show d-block px-3" tabIndex={-1} style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content border-0 shadow">
-              <div className="modal-header border-bottom py-3">
-                <h5 className="modal-title h6 fw-bold">Isi Data Saat Aktivitas Terjadi</h5>
+            <div className="modal-content border-0 shadow rounded-4 overflow-hidden">
+              <div className="modal-header border-bottom py-3 bg-light">
+                <h5 className="modal-title h6 fw-bold text-dark">Isi Data Saat Aktivitas Terjadi</h5>
                 <button type="button" className="btn-close" onClick={closeSnapshot}></button>
               </div>
               <div className="modal-body p-3">
@@ -599,10 +601,10 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
                     <tbody>
                       {Object.entries(selectedSnapshot).map(([key, value]) => (
                         <tr key={key}>
-                          <td className="fw-semibold small text-secondary" style={{ width: "35%" }}>
+                          <td className="fw-semibold small text-secondary py-2 px-3" style={{ width: "35%" }}>
                             {FIELD_LABELS[key] || humanizeKey(key)}
                           </td>
-                          <td className="small text-break">{formatSnapshotValue(key, value)}</td>
+                          <td className="small text-break py-2 px-3">{formatSnapshotValue(key, value)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -611,19 +613,19 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
 
                 <button
                   type="button"
-                  className="btn btn-link btn-sm text-decoration-none px-0 mt-2"
+                  className="btn btn-link btn-sm text-decoration-none px-0 mt-3 text-success fw-semibold"
                   onClick={() => setShowRawJson((v) => !v)}
                 >
                   {showRawJson ? "Sembunyikan data teknis" : "Lihat data teknis (JSON)"}
                 </button>
                 {showRawJson && (
-                  <pre className="bg-dark text-light p-3 rounded mb-0 small" style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  <pre className="bg-dark text-light p-3 rounded-3 mb-0 small mt-2" style={{ maxHeight: "300px", overflowY: "auto" }}>
                     {JSON.stringify(selectedSnapshot, null, 2)}
                   </pre>
                 )}
               </div>
-              <div className="modal-footer border-top py-2">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={closeSnapshot}>
+              <div className="modal-footer border-top py-2 bg-light">
+                <button type="button" className="btn btn-secondary btn-sm px-3" onClick={closeSnapshot}>
                   Tutup
                 </button>
               </div>
@@ -634,3 +636,32 @@ export default function AuditTrail({ resourceType: propResourceType, resourceId 
     </div>
   );
 }
+
+// Styling Responsif & Konsistensi Tema Audit Trail
+const AUDIT_TRAIL_CSS = `
+  .audit-row-item {
+    transition: background-color 0.15s ease;
+  }
+  .audit-row-item:hover {
+    background-color: #f8fff9 !important;
+  }
+  .pagination .page-item.active .page-link {
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+    color: #fff !important;
+  }
+  .pagination .page-link {
+    color: #198754;
+    border: 1px solid #dee2e6;
+  }
+  .pagination .page-link:hover {
+    background-color: #e9ecef;
+    color: #0f5132;
+  }
+  @media (max-width: 768px) {
+    .container-fluid {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+    }
+  }
+`;
