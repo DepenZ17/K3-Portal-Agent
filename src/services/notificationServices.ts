@@ -26,25 +26,25 @@ export interface NotificationListResponse {
   results: NotificationItem[];
 }
 
-/** Mengambil jumlah notifikasi yang belum dibaca (untuk angka merah di lonceng)[cite: 7] */
+/** Mengambil jumlah notifikasi yang belum dibaca (untuk angka merah di lonceng) */
 export async function getUnreadCount(): Promise<{ unread_count: number }> {
   const response = await api.get<{ unread_count: number }>("/notifications/unread-count/");
   return response.data;
 }
 
-/** Mengambil daftar notifikasi untuk dropdown[cite: 7] */
+/** Mengambil daftar notifikasi untuk dropdown */
 export async function getNotifications(params?: { page?: number; unread?: boolean }): Promise<NotificationListResponse> {
   const response = await api.get<NotificationListResponse>("/notifications/", { params });
   return response.data;
 }
 
-/** Menandai satu notifikasi telah dibaca[cite: 7] */
+/** Menandai satu notifikasi telah dibaca */
 export async function markNotificationAsRead(id: number): Promise<NotificationItem> {
   const response = await api.post<NotificationItem>(`/notifications/${id}/read/`);
   return response.data;
 }
 
-/** Menandai seluruh notifikasi telah dibaca[cite: 7] */
+/** Menandai seluruh notifikasi telah dibaca */
 export async function markAllNotificationsAsRead(): Promise<{ updated: number }> {
   const response = await api.post<{ updated: number }>("/notifications/read-all/");
   return response.data;

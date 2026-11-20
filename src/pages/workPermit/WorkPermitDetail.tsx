@@ -641,14 +641,29 @@ export default function WorkPermitDetailComponent() {
               <h5 className="fw-bold text-dark border-bottom pb-2 mb-3">Informasi Aktivitas &amp; Lokasi</h5>
               
               <div className="mb-2">
-                <strong>Dokumen HIRA:</strong> {permit.hira?.document ? `[Dok: ${permit.hira.document.document_number || permit.hira.document.id}] Paket: ${permit.hira.document.work_package} (${permit.hira.document.work_area})` : "-"}
+                <strong>Dokumen HIRA Terkait:</strong>
+                {permit.hira?.documents && permit.hira.documents.length > 0 ? (
+                  <ul className="list-unstyled ps-3 mt-1 small">
+                    {permit.hira.documents.map((item) => (
+                      <li key={item.document.id} className="mb-1">
+                        &bull; <strong>[Dok: {item.document.document_number || item.document.id}]</strong>{" "}
+                        Paket: {item.document.work_package} ({item.document.work_area})
+                        {item.document.created_by_name ? ` — ${item.document.created_by_name}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-muted ms-2">-</span>
+                )}
               </div>
 
               <div className="mb-2">
                 <strong>Aktivitas HIRA Dipilih:</strong>
-                {permit.hira?.groups && permit.hira.groups.length > 0 ? (
+                {permit.hira?.documents && permit.hira.documents.length > 0 ? (
                   <ul className="list-unstyled ps-3 mt-1 small">
-                    {permit.hira.groups.flatMap((g) => g.activities || [])
+                    {permit.hira.documents
+                      .flatMap((item) => item.groups || [])
+                      .flatMap((g) => g.activities || [])
                       .filter((act) => act.id && permit.hira_activity_ids.includes(act.id))
                       .map((act, idx) => (
                         <li key={act.id || idx} className="mb-1">

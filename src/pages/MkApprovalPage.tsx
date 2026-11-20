@@ -203,6 +203,20 @@ export default function MkApprovalPage() {
                 <p className="mb-1"><strong>Lokasi:</strong> {String(permit?.work_location || "")}</p>
                 <p className="mb-1"><strong>Deskripsi:</strong> {String(permit?.work_description || "")}</p>
                 <p className="mb-0"><strong>Kategori Risiko:</strong> {String(permit?.risk_category || "")}</p>
+
+                {permit?.hira?.documents && permit.hira.documents.length > 0 && (
+                  <div className="mt-2">
+                    <strong>Dokumen HIRA Terkait:</strong>
+                    <ul className="list-unstyled ps-3 mt-1 mb-0 small">
+                      {permit.hira.documents.map((item) => (
+                        <li key={item.document.id}>
+                          &bull; <strong>[Dok: {item.document.document_number || item.document.id}]</strong>{" "}
+                          {item.document.work_package} ({item.document.work_area})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="mb-4 p-3 border rounded bg-white">

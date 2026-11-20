@@ -322,7 +322,7 @@ export default function WorkPermitPrint() {
   const { user } = useAuth();
 
   const [permit, setPermit] = useState<WorkPermitDetail | null>(null);
-  const [hiraDoc, setHiraDoc] = useState<HiraDetailResponse | null>(null);
+  const [hiraDocs, setHiraDocs] = useState<HiraDetailResponse[]>([]);
   const [hiraUnavailable, setHiraUnavailable] = useState<boolean>(false);
   const [areaMap, setAreaMap] = useState<Record<string, string>>(FALLBACK_AREAS);
   const [ppeMap, setPpeMap] = useState<Record<string, string>>(FALLBACK_PPE);
@@ -356,15 +356,27 @@ export default function WorkPermitPrint() {
         if (Object.keys(areas).length) setAreaMap(areas);
         if (Object.keys(ppe).length) setPpeMap(ppe);
 
-        // Dokumen HIRA lengkap untuk halaman 1. Bila tidak bisa dibaca, halaman 3 tetap memuat HIRA terpilih.
-        const hiraId = detail.hira_document ?? detail.hira?.document?.id;
-        if (hiraId) {
-          try {
-            const doc = await getHiraDocumentById(String(hiraId));
-            if (!cancelled) setHiraDoc(doc);
-          } catch {
-            if (!cancelled) setHiraUnavailable(true);
+        // Dokumen HIRA lengkap untuk halaman 1. Bila tidak bisa dibaca, halaman 4 tetap memuat HIRA terpilih.
+        const docIdsFromDetail =
+          Array.isArray(detail.hira_document_ids) && detail.hira_document_ids.length > 0
+            ? detail.hira_document_ids
+            : (detail.hira?.documents ?? []).map((item) => item.document.id);
+        const uniqueDocIds = Array.from(new Set(docIdsFromDetail.filter((docId) => docId != null)));
+
+        if (uniqueDocIds.length > 0) {
+          const results = await Promise.allSettled(
+            uniqueDocIds.map((docId) => getHiraDocumentById(String(docId)))
+          );
+          if (!cancelled) {
+            const loadedDocs = results
+              .filter((r): r is PromiseFulfilledResult<HiraDetailResponse> => r.status === "fulfilled")
+              .map((r) => r.value);
+            setHiraDocs(loadedDocs);
+            setHiraUnavailable(loadedDocs.length === 0);
           }
+        } else if (!cancelled) {
+          setHiraDocs([]);
+          setHiraUnavailable(false);
         }
       } catch {
         if (!cancelled) setError("Gagal memuat data izin kerja untuk dicetak.");
@@ -549,7 +561,8 @@ export default function WorkPermitPrint() {
   const afterPhotos = photos.filter((p) => p.stage === "after");
   const geoStamps = permit.geo_stamps ?? [];
   const attachments = permit.attachments ?? [];
-  const selectedGroups = permit.hira?.groups ?? [];
+  const selectedDocItems = permit.hira?.documents ?? [];
+  const selectedActivityIds = permit.hira_activity_ids ?? [];
   const highest = permit.highest_initial_category ?? permit.risk_category;
 
   // Keputusan putaran berjalan vs putaran sebelumnya (riwayat penolakan)
@@ -620,24 +633,28 @@ export default function WorkPermitPrint() {
         {/* ============ HALAMAN 1: HIRA LENGKAP ============ */}
         <section className="pp-section pp-hira">
           <h1 className="pp-title">HAZARD IDENTIFICATION AND RISK ASSESSMENT (HIRA)</h1>
-          {hiraDoc ? (
+          {hiraDocs.length > 0 ? (
             <>
-              <table className="pp-info">
-                <tbody>
-                  <Info label="Proyek">{hiraDoc.project_name}</Info>
-                  <Info label="No. Dokumen">
-                    {hiraDoc.document_number || "Belum diatur"}
-                  </Info>
-                  <Info label="Paket Pekerjaan">{hiraDoc.work_package || "-"}</Info>
-                  <Info label="Area Pekerjaan">{hiraDoc.work_area || "-"}</Info>
-                  <Info label="Tanggal Dokumen">{formatDate(hiraDoc.document_date)}</Info>
-                  <Info label="Dibuat Oleh">
-                    {hiraDoc.created_by?.full_name || "-"}
-                  </Info>
-                </tbody>
-              </table>
               <p className="pp-muted">Tanda ✓ pada kolom &quot;Izin&quot; menandai aktivitas yang dipakai izin kerja ini.</p>
-              <HiraGroupsTable groups={hiraDoc.groups ?? []} highlightIds={permit.hira_activity_ids ?? []} />
+              {hiraDocs.map((docItem, dIdx) => (
+                <div key={docItem.id ?? `hira-doc-${dIdx}`} className="pp-group">
+                  <table className="pp-info">
+                    <tbody>
+                      <Info label="Proyek">{docItem.project_name}</Info>
+                      <Info label="No. Dokumen">
+                        {docItem.document_number || "Belum diatur"}
+                      </Info>
+                      <Info label="Paket Pekerjaan">{docItem.work_package || "-"}</Info>
+                      <Info label="Area Pekerjaan">{docItem.work_area || "-"}</Info>
+                      <Info label="Tanggal Dokumen">{formatDate(docItem.document_date)}</Info>
+                      <Info label="Dibuat Oleh">
+                        {docItem.created_by?.full_name || "-"}
+                      </Info>
+                    </tbody>
+                  </table>
+                  <HiraGroupsTable groups={docItem.groups ?? []} highlightIds={selectedActivityIds} />
+                </div>
+              ))}
             </>
           ) : (
             <p className="pp-muted">
@@ -799,7 +816,35 @@ export default function WorkPermitPrint() {
             Hanya aktivitas yang dipilih pada izin ini. Kategori risiko izin mengikuti yang tertinggi:{" "}
             {highest ? <RiskTag category={highest} text={`${highest} · ${RISK_LABELS[highest] ?? ""}`} /> : "-"}
           </p>
-          <HiraGroupsTable groups={selectedGroups} />
+          {selectedDocItems.length === 0 ? (
+            <p className="pp-muted">Belum ada aktivitas terpilih.</p>
+          ) : (
+            selectedDocItems.map((docItem) => {
+              const filteredGroups: HiraGroup[] = (docItem.groups ?? [])
+                .map((grp) => ({
+                  ...grp,
+                  activities: (grp.activities ?? []).filter(
+                    (act) => act.id !== undefined && selectedActivityIds.includes(act.id)
+                  ),
+                }))
+                .filter((grp) => grp.activities.length > 0);
+
+              return (
+                <div key={docItem.document.id} className="pp-group">
+                  <div className="pp-group-head">
+                    <strong>
+                      Dokumen HIRA: [{docItem.document.document_number || docItem.document.id}]{" "}
+                      {docItem.document.work_package} ({docItem.document.work_area})
+                    </strong>
+                    {docItem.document.created_by_name && (
+                      <div className="pp-muted">Dibuat oleh: {docItem.document.created_by_name}</div>
+                    )}
+                  </div>
+                  <HiraGroupsTable groups={filteredGroups} />
+                </div>
+              );
+            })
+          )}
         </section>
 
         {/* ============ HALAMAN 5: LAMPIRAN DOKUMEN ============ */}

@@ -1,18 +1,17 @@
 // src/types/workPermit.ts
-
 /** ==========================================
  *  1. ENUMS & BASIC TYPES
  *  ========================================== */
 
-/** Jenis izin kerja yang didukung dalam sistem (saat ini working_at_height yang aktif) */
-export type PermitType = 
-  | "working_at_height" 
-  | "confined_space" 
-  | "fire_explosive" 
-  | "lifting" 
+/** Jenis izin kerja yang didukung dalam sistem */
+export type PermitType =
+  | "working_at_height"
+  | "confined_space"
+  | "fire_explosive"
+  | "lifting"
   | "tower_crane";
 
-/** Status alur kerja (workflow) dari sebuah izin kerja */
+/** Status alur kerja dari sebuah izin kerja */
 export type WorkPermitStatus =
   | "draft"
   | "pending_supervisor"
@@ -24,6 +23,20 @@ export type WorkPermitStatus =
   | "pending_close"
   | "closed"
   | "cancelled";
+
+/** Kategori tingkat risiko keselamatan kerja */
+export type RiskCategory = "R" | "M" | "T" | "E";
+
+/** Referensi singkat data pengguna dari server */
+export interface UserRef {
+  id: number;
+  full_name: string;
+  role: string;
+}
+
+/** ==========================================
+ *  2. HIRA STRUCTURES
+ *  ========================================== */
 
 export interface PermitHiraActivity {
   id?: number;
@@ -55,21 +68,25 @@ export interface PermitHiraGroup {
   activities: PermitHiraActivity[];
 }
 
-/** Kategori tingkat risiko keselamatan kerja (R, M, T, E) */
-export type RiskCategory = "R" | "M" | "T" | "E";
-
-/** Referensi singkat data pengguna dari server */
-export interface UserRef {
-  id: number;
-  full_name: string;
-  role: string;
+/** Dokumen HIRA yang terhubung ke izin kerja */
+export interface PermitHiraDocument {
+  document: {
+    id: number;
+    work_package: string;
+    work_area: string;
+    document_number: string | null;
+    document_date: string | null;
+    status: string;
+    created_by_name?: string;
+  };
+  groups: PermitHiraGroup[];
 }
 
 /** ==========================================
- *  2. ATTACHMENTS & EVIDENCE STRUCTURES
+ *  3. ATTACHMENTS & EVIDENCE STRUCTURES
  *  ========================================== */
 
-/** Lampiran PDF (jenis medical dan certificate wajib disertakan saat submit)*/
+/** Lampiran PDF: medical dan certificate */
 export interface PermitAttachment {
   id: number;
   kind: "medical" | "certificate";
@@ -77,18 +94,18 @@ export interface PermitAttachment {
   size: number;
   uploaded_by?: number | UserRef;
   uploaded_at: string;
-  url: string | null; // Tautan bertanda tangan (signed link) yang berlaku sementara
+  url: string | null;
 }
 
-/** Data geolokasi perangkat yang dikirim saat aksi submit/ dan approve/ */
+/** Data geolokasi perangkat */
 export interface GpsLocationData {
   latitude: number;
   longitude: number;
-  accuracy: number;     // Tingkat akurasi GPS dalam satuan meter
-  captured_at: string;  // Waktu pengambilan koordinat dalam format ISO timestamp
+  accuracy: number;
+  captured_at: string;
 }
 
-/** Rekaman stempel lokasi (geo_stamps) dari server untuk verifikasi peninjau */
+/** Rekaman stempel lokasi dari server */
 export interface PermitGeoStamp {
   id: number;
   step: string;
@@ -101,7 +118,7 @@ export interface PermitGeoStamp {
   recorded_at?: string;
 }
 
-/** Foto bukti dokumentasi lapangan (tahap before / after) */
+/** Foto bukti dokumentasi lapangan */
 export interface PermitPhoto {
   id: number;
   stage: "before" | "after";
@@ -114,60 +131,59 @@ export interface PermitPhoto {
 }
 
 /** ==========================================
- *  3. SAFETY CHECKLIST STRUCTURE
+ *  4. SAFETY CHECKLIST STRUCTURE
  *  ========================================== */
 
-/** Struktur checklist keselamatan kerja di ketinggian (14 poin pertanyaan) */
+/** Checklist keselamatan kerja di ketinggian */
 export interface HeightChecklist {
   [key: string]: boolean;
 }
 
 /** ==========================================
- *  4. PAYLOAD INTERFACES (CREATE / UPDATE)
+ *  5. PAYLOAD INTERFACES (CREATE / UPDATE)
  *  ========================================== */
 
-/**
- * Body data untuk pembuatan (POST /permits/) dan pembaruan (PATCH /permits/{id}/).
- * Menggunakan pendekatan hira_document dan hira_activity_ids sesuai perubahan struktur HIRA
- */
+/** Body data untuk POST /permits/ dan PATCH /permits/{id}/ */
 export interface WorkPermitPayload {
   project: number;
   permit_type: PermitType;
-  hira_document?: number | null;      // ID dokumen HIRA yang sudah disetujui
-  hira_activity_ids?: number[];       // Daftar ID aktivitas dari HIRA tersebut (maksimal 10)
-  work_date: string;       // Tanggal pengerjaan (Format: "YYYY-MM-DD")
-  work_start: string;      // Jam mulai kerja (Format: "HH:MM")
-  work_end: string;        // Jam selesai kerja (Format: "HH:MM")
-  work_location: string;   // Lokasi spesifik area pekerjaan
-  work_description: string;// Deskripsi detail pekerjaan
-  equipment_used?: string; // Peralatan yang digunakan (opsional)
-  person_in_charge: string;// Nama penanggung jawab lapangan
-  worker_count: number;    // Jumlah total pekerja
-  safety_areas: string[];  // Daftar kode area keselamatan dari skema
-  checklist: HeightChecklist; // Status jawaban checklist keselamatan
-  ppe: string[];           // Daftar kunci APD yang digunakan
-  ppe_other?: string[];    // Catatan APD tambahan (maksimal 2 baris)
+
+  /** ID aktivitas dari HIRA yang telah disetujui */
+  hira_activity_ids?: number[];
+
+  work_date: string;
+  work_start: string;
+  work_end: string;
+  work_location: string;
+  work_description: string;
+  equipment_used?: string;
+  person_in_charge: string;
+  worker_count: number;
+  safety_areas: string[];
+  checklist: HeightChecklist;
+  ppe: string[];
+  ppe_other?: string[];
 }
 
-/** Body untuk submit/ (semua field geolokasi wajib) */
+/** Body untuk submit permit */
 export type SubmitPermitPayload = GpsLocationData;
 
-/** Body untuk approve/ (Supervisor & HSE Officer wajib menyertakan lokasi, PM tidak) */
+/** Body untuk approve permit */
 export interface ApprovePermitPayload extends Partial<GpsLocationData> {
   remarks?: string;
 }
 
 /** ==========================================
- *  5. APPROVAL & WORKFLOW INTERFACES
+ *  6. APPROVAL & WORKFLOW INTERFACES
  *  ========================================== */
 
-/** Item stepper untuk menampilkan status rantai persetujuan (approval chain) */
+/** Item stepper approval chain */
 export interface ApprovalChainItem {
   step: "supervisor" | "hse_officer" | "project_manager" | "mk";
   state: "approved" | "rejected" | "pending" | "waiting";
 }
 
-/** Catatan histori keputusan persetujuan dari setiap peninjau */
+/** Histori keputusan persetujuan */
 export interface WorkPermitApprovalHistory {
   id?: number;
   step: string;
@@ -183,7 +199,7 @@ export interface WorkPermitApprovalHistory {
   decided_at?: string | null;
 }
 
-/** Informasi permintaan persetujuan eksternal untuk Manajemen Konstruksi (MK) */
+/** Informasi permintaan persetujuan MK */
 export interface PermitMkRequest {
   id: number;
   contact_name: string;
@@ -197,9 +213,10 @@ export interface PermitMkRequest {
 }
 
 /** ==========================================
- *  6. RESPONSE INTERFACES
+ *  7. RESPONSE INTERFACES
  *  ========================================== */
 
+/** Data permit pada daftar */
 export interface WorkPermitListItem {
   id: number;
   project: number;
@@ -211,7 +228,7 @@ export interface WorkPermitListItem {
   work_description: string;
   status: WorkPermitStatus;
   risk_category: RiskCategory | null;
-  highest_initial_category?: RiskCategory | null; 
+  highest_initial_category?: RiskCategory | null;
   submission_round: number;
   created_by?: UserRef;
   created_at: string;
@@ -219,31 +236,23 @@ export interface WorkPermitListItem {
   hira_activity_name?: string;
 }
 
-/** Struktur objek respons lengkap saat mengambil detail izin kerja (GET /permits/{id}/) */
+/** Respons detail izin kerja */
 export interface WorkPermitDetail extends WorkPermitListItem {
-  hira_document: number | null;
   hira_activity_ids: number[];
+  hira_document_ids: number[];
   highest_initial_category: RiskCategory | null;
 
-  work_start: string; 
-  work_end: string;   
-  
-  // Layout HIRA yang dipilih beserta rincian aktivitas yang dicentang
+  work_start: string;
+  work_end: string;
+
+  /** Multi-dokumen HIRA yang terhubung ke permit */
   hira?: {
-    document: {
-      id: number;
-      work_package: string;
-      work_area: string;
-      document_number: string | null;
-      document_date: string | null;
-      status: string;
-    };
-    groups: PermitHiraGroup[];
+    documents: PermitHiraDocument[];
   } | null;
 
-  attachments?: PermitAttachment[]; // Daftar lampiran dokumen PDF
-  photos?: PermitPhoto[];          // Foto bukti lapangan
-  geo_stamps?: PermitGeoStamp[];    // Rekaman jejak lokasi GPS
+  attachments?: PermitAttachment[];
+  photos?: PermitPhoto[];
+  geo_stamps?: PermitGeoStamp[];
 
   equipment_used?: string;
   person_in_charge: string;
@@ -260,19 +269,21 @@ export interface WorkPermitDetail extends WorkPermitListItem {
   cancelled_by?: string | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+
   post_work_evaluation?: string | null;
   close_requested_at?: string | null;
   closed_by?: string | null;
   closed_at?: string | null;
 
   form: {
-    code: string;     // Kode formulir resmi (misal: F.01/P.10/SHE/KPT)
-    revision: string | number; // Dikembalikan sesuai file lama (string | number)
+    code: string;
+    revision: string | number;
   };
+
   allowed_actions: Record<string, boolean>;
 }
 
-/** Kunci aksi yang diizinkan (allowed actions) pada suatu dokumen izin kerja */
+/** Kunci aksi yang diizinkan oleh backend */
 export type WorkPermitAllowedAction =
   | "can_edit"
   | "can_submit"
@@ -281,13 +292,13 @@ export type WorkPermitAllowedAction =
   | "can_request_close"
   | "can_confirm_close"
   | "can_set_number"
-  | "can_manage_attachments"       // <-- Ditambahkan sesuai spesifikasi aksi baru[cite: 8]
+  | "can_manage_attachments"
   | "can_upload_before_photos"
   | "can_upload_after_photos"
   | "decide_requires_location"
   | "can_resend_mk_link";
 
-/** Parameter query filter untuk pencarian dan pemfilteran daftar Work Permits */
+/** Parameter filter daftar Work Permit */
 export interface WorkPermitListParams {
   project?: number | string;
   status?: WorkPermitStatus;
@@ -297,7 +308,7 @@ export interface WorkPermitListParams {
   page_size?: number;
 }
 
-/** Format struktur respons terpaginasi dari server */
+/** Respons daftar permit dengan pagination */
 export interface PaginatedWorkPermitResponse {
   count: number;
   next?: string | null;

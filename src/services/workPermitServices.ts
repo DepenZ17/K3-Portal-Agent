@@ -8,19 +8,78 @@ import type {
   PermitType,
   SubmitPermitPayload,
   ApprovePermitPayload,
+  PaginatedWorkPermitResponse,
 } from "../types/workPermit";
+
+import type { AxiosError } from "axios";
 
 const BASE_URL = "/permits";
 
-// Interface untuk struktur respons terpaginasi
-export interface PaginatedWorkPermitResponse {
-  count: number;
-  next?: string | null;
-  previous?: string | null;
-  results: WorkPermitListItem[];
-}
+// ==========================================
+// ERROR HANDLING
+// ==========================================
 
-// Interface untuk item dokumen HIRA yang dikembalikan oleh endpoint HIRA Options Picker
+/**
+ * Mengambil pesan error dari respons API.
+ * Mendukung pesan string, field validation, dan error jaringan.
+ */
+export const getWorkPermitErrorMessage = (
+  error: unknown
+): string => {
+  const axiosError = error as AxiosError<
+    Record<string, unknown>
+  >;
+
+  const data = axiosError.response?.data;
+
+  if (data) {
+    // Error berupa detail string
+    if (typeof data.detail === "string") {
+      return data.detail;
+    }
+
+    // Error berupa pesan string
+    if (typeof data.message === "string") {
+      return data.message;
+    }
+
+    // Error validasi Django REST Framework
+    const validationMessages = Object.entries(data)
+      .map(([field, value]) => {
+        if (Array.isArray(value)) {
+          return `${field}: ${value.join(", ")}`;
+        }
+
+        if (typeof value === "string") {
+          return `${field}: ${value}`;
+        }
+
+        return null;
+      })
+      .filter((message): message is string => message !== null);
+
+    if (validationMessages.length > 0) {
+      return validationMessages.join("\n");
+    }
+  }
+
+  if (axiosError.response) {
+    return `Terjadi kesalahan server (${axiosError.response.status}).`;
+  }
+
+  if (axiosError.request) {
+    return "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+  }
+
+  return error instanceof Error
+    ? error.message
+    : "Terjadi kesalahan yang tidak diketahui.";
+};
+
+// ==========================================
+// HIRA OPTIONS PICKER
+// ==========================================
+
 export interface HiraOptionItem {
   id: number;
   work_package: string;
@@ -43,55 +102,65 @@ export interface HiraOptionItem {
   }>;
 }
 
-// 1. Get List Work Permits (Mendukung filter query & paginasi)
-export const getWorkPermits = async (
-  params?: WorkPermitListParams
-): Promise<WorkPermitListItem[] | PaginatedWorkPermitResponse> => {
-  const response = await api.get<WorkPermitListItem[] | PaginatedWorkPermitResponse>(`${BASE_URL}/`, { params });
+// Mengambil dokumen HIRA approved berdasarkan proyek
+export const getApprovedHiraDocumentsByProject = async (
+  projectId: number | string
+): Promise<HiraOptionItem[]> => {
+  const response = await api.get<HiraOptionItem[]>(
+    `${BASE_URL}/hira-options/`,
+    {
+      params: {
+        project: projectId,
+      },
+    }
+  );
+
   return response.data;
 };
 
-// 2. Get Form Schema (Pertanyaan checklist, safety areas, PPE options)
-export const getWorkPermitFormSchema = async (type: PermitType = "working_at_height") => {
-  try {
-    const response = await api.get(`${BASE_URL}/form-schema/`, {
-      params: { type },
-    });
-    return response.data;
-  } catch {
-    console.warn("Gagal memuat form schema dari server, menggunakan data bawaan form.");
-    return { safety_areas: [], ppe_options: [] };
-  }
+// ==========================================
+// WORK PERMIT CRUD
+// ==========================================
+
+// 1. Get List Work Permits
+export const getWorkPermits = async (
+  params?: WorkPermitListParams
+): Promise<WorkPermitListItem[] | PaginatedWorkPermitResponse> => {
+  const response = await api.get<
+    WorkPermitListItem[] | PaginatedWorkPermitResponse
+  >(`${BASE_URL}/`, { params });
+
+  return response.data;
 };
 
-// 3. Create Work Permit (JSON)
-export const createWorkPermit = async (payload: WorkPermitPayload): Promise<WorkPermitDetail> => {
+// 2. Get Form Schema
+export const getWorkPermitFormSchema = async (
+  type: PermitType = "working_at_height"
+) => {
+  const response = await api.get(`${BASE_URL}/form-schema/`, {
+    params: { type },
+  });
+
+  return response.data;
+};
+
+// 3. Create Work Permit
+export const createWorkPermit = async (
+  payload: WorkPermitPayload
+): Promise<WorkPermitDetail> => {
   const response = await api.post(`${BASE_URL}/`, payload);
   return response.data;
 };
 
-// Mengambil seluruh dokumen HIRA yang approved dalam proyek via Endpoint HIRA Options Picker
-export const getApprovedHiraDocumentsByProject = async (projectId: number | string): Promise<HiraOptionItem[]> => {
-  try {
-    const response = await api.get(`${BASE_URL}/hira-options/`, {
-      params: {
-        project: projectId,
-      },
-    });
-    return response.data;
-  } catch {
-    console.warn("Gagal memuat opsi HIRA berdasarkan proyek.");
-    return [];
-  }
-};
-
-// 4. Get Detail Work Permit by ID
-export const getWorkPermitById = async (id: string | number): Promise<WorkPermitDetail> => {
+// 4. Get Detail Work Permit
+export const getWorkPermitById = async (
+  id: string | number
+): Promise<WorkPermitDetail> => {
   const response = await api.get(`${BASE_URL}/${id}/`);
   return response.data;
 };
 
-// 5. Update Work Permit (PATCH, JSON). Hanya saat draft atau rejected.
+// 5. Update Work Permit
 export const updateWorkPermit = async (
   id: string | number,
   payload: Partial<WorkPermitPayload>
@@ -100,130 +169,202 @@ export const updateWorkPermit = async (
   return response.data;
 };
 
-// 6. Delete Draft (Hanya draft yang belum pernah di-submit)
-export const deleteWorkPermit = async (id: string | number): Promise<void> => {
+// 6. Delete Draft
+export const deleteWorkPermit = async (
+  id: string | number
+): Promise<void> => {
   await api.delete(`${BASE_URL}/${id}/`);
 };
 
 // ==========================================
-// WORKFLOW & ACTION ENDPOINTS (/permits/{id}/<action>/)
+// WORKFLOW & ACTION ENDPOINTS
 // ==========================================
 
-// Submit permit oleh creator (wajib lokasi + minimal 1 foto "before", 1 medical PDF, 1 certificate PDF, 1 activity HIRA)
-export const submitWorkPermit = async (id: string | number, locationData: SubmitPermitPayload): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/submit/`, locationData);
+// Submit permit
+export const submitWorkPermit = async (
+  id: string | number,
+  locationData: SubmitPermitPayload
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/submit/`,
+    locationData
+  );
+
   return response.data;
 };
 
-// Approve oleh role penanggung jawab. Supervisor & HSE Officer wajib menyertakan lokasi, PM tidak.
-export const approveWorkPermit = async (id: string | number, payload?: ApprovePermitPayload): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/approve/`, payload);
+// Approve permit
+export const approveWorkPermit = async (
+  id: string | number,
+  payload?: ApprovePermitPayload
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/approve/`,
+    payload
+  );
+
   return response.data;
 };
 
-// Reject (Wajib remarks/alasan, tanpa lokasi)
-export const rejectWorkPermit = async (id: string | number, remarks: string): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/reject/`, { remarks });
+// Reject permit
+export const rejectWorkPermit = async (
+  id: string | number,
+  remarks: string
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/reject/`,
+    { remarks }
+  );
+
   return response.data;
 };
 
-// Cancel oleh HSE Coordinator
-export const cancelWorkPermit = async (id: string | number, reason: string): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/cancel/`, { reason });
+// Cancel permit
+export const cancelWorkPermit = async (
+  id: string | number,
+  reason: string
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/cancel/`,
+    { reason }
+  );
+
   return response.data;
 };
 
-// Request Close oleh Creator (wajib post_work_evaluation + minimal 1 foto "after")
-export const requestCloseWorkPermit = async (id: string | number, postWorkEvaluation: string): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/request-close/`, {
-    post_work_evaluation: postWorkEvaluation,
-  });
+// Request Close
+export const requestCloseWorkPermit = async (
+  id: string | number,
+  postWorkEvaluation: string
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/request-close/`,
+    {
+      post_work_evaluation: postWorkEvaluation,
+    }
+  );
+
   return response.data;
 };
 
-// Confirm Close oleh HSE Officer (saat status pending_close)
-export const confirmCloseWorkPermit = async (id: string | number): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/confirm-close/`);
+// Confirm Close
+export const confirmCloseWorkPermit = async (
+  id: string | number
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/confirm-close/`
+  );
+
   return response.data;
 };
 
-// Set Nomor Dokumen oleh HSE Officer / HSE Coordinator
-export const setWorkPermitNumber = async (id: string | number, documentNumber: string): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/set-number/`, {
-    document_number: documentNumber,
-  });
+// Set Document Number
+export const setWorkPermitNumber = async (
+  id: string | number,
+  documentNumber: string
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/set-number/`,
+    {
+      document_number: documentNumber,
+    }
+  );
+
   return response.data;
 };
 
 // ==========================================
-// EVIDENCE / PHOTO ENDPOINTS (/permits/{id}/photos/)
+// EVIDENCE / PHOTO ENDPOINTS
 // ==========================================
 
-// Upload foto bukti lapangan (JPEG/PNG/WebP, maks 5 MB per file, maks 5 per stage)
+// Upload foto before / after
 export const uploadWorkPermitPhotos = async (
   id: string | number,
   stage: "before" | "after",
   files: File[]
 ): Promise<WorkPermitDetail> => {
   const formData = new FormData();
+
   formData.append("stage", stage);
 
   files.forEach((file) => {
     formData.append("photos", file);
   });
 
-  const response = await api.post(`${BASE_URL}/${id}/photos/`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.post(
+    `${BASE_URL}/${id}/photos/`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
   return response.data;
 };
 
-// Hapus foto bukti lapangan berdasarkan ID foto
-export const deleteWorkPermitPhoto = async (id: string | number, photoId: string | number): Promise<void> => {
-  await api.delete(`${BASE_URL}/${id}/photos/${photoId}/`);
+// Delete photo
+export const deleteWorkPermitPhoto = async (
+  id: string | number,
+  photoId: string | number
+): Promise<void> => {
+  await api.delete(
+    `${BASE_URL}/${id}/photos/${photoId}/`
+  );
 };
 
 // ==========================================
-// ATTACHMENTS (PDF) ENDPOINTS (/permits/{id}/attachments/)
+// ATTACHMENTS (PDF) ENDPOINTS
 // ==========================================
 
-// Upload lampiran PDF wajib (kind: "medical" atau "certificate", maks 3 MB per file)
+// Upload medical / certificate PDF
 export const uploadWorkPermitAttachments = async (
   id: string | number,
   kind: "medical" | "certificate",
   files: File[]
 ): Promise<WorkPermitDetail> => {
   const formData = new FormData();
+
   formData.append("kind", kind);
 
   files.forEach((file) => {
     formData.append("files", file);
   });
 
-  const response = await api.post(`${BASE_URL}/${id}/attachments/`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.post(
+    `${BASE_URL}/${id}/attachments/`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
   return response.data;
 };
 
-// Hapus lampiran PDF tertentu berdasarkan ID attachment
+// Delete attachment
 export const deleteWorkPermitAttachment = async (
   id: string | number,
   attachmentId: string | number
 ): Promise<void> => {
-  await api.delete(`${BASE_URL}/${id}/attachments/${attachmentId}/`);
+  await api.delete(
+    `${BASE_URL}/${id}/attachments/${attachmentId}/`
+  );
 };
 
 // ==========================================
-// MK RESEND LINK ENDPOINT (/permits/{id}/mk-resend/)
+// MK RESEND LINK
 // ==========================================
 
-// Kirim ulang tautan persetujuan MK (Manajemen Konstruksi) saat status pending_mk
-export const resendMkLink = async (id: string | number): Promise<WorkPermitDetail> => {
-  const response = await api.post(`${BASE_URL}/${id}/mk-resend/`);
+export const resendMkLink = async (
+  id: string | number
+): Promise<WorkPermitDetail> => {
+  const response = await api.post(
+    `${BASE_URL}/${id}/mk-resend/`
+  );
+
   return response.data;
 };

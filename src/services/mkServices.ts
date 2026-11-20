@@ -10,6 +10,37 @@ const publicApi = axios.create({
   baseURL: API_BASE_URL,
 });
 
+export interface MkHiraActivity {
+  id?: number;
+  activity_name?: string;
+  potential_hazard?: string;
+  risk_impact?: string;
+  initial_category?: string;
+  residual_category?: string;
+  [key: string]: unknown;
+}
+
+export interface MkHiraGroup {
+  id?: number;
+  location_function?: string;
+  applicable_regulation?: string;
+  order?: number;
+  activities?: MkHiraActivity[];
+}
+
+export interface MkHiraDocumentItem {
+  document: {
+    id: number;
+    work_package: string;
+    work_area: string;
+    document_number: string | null;
+    document_date: string | null;
+    status: string;
+    created_by_name?: string;
+  };
+  groups: MkHiraGroup[];
+}
+
 // 2. Definisi Tipe Detail Permit (Izin Kerja)
 export interface PermitDetail {
   id?: number;
@@ -27,6 +58,11 @@ export interface PermitDetail {
   worker_count?: number;
   risk_category?: string;
   applicant?: string;
+  hira_activity_ids?: number[];
+  hira_document_ids?: number[];
+  hira?: {
+    documents: MkHiraDocumentItem[];
+  } | null;
   approvals?: Array<{
     step: string;
     decision: string;
@@ -45,12 +81,12 @@ export interface OtpDetails {
   requests_left?: number;
 }
 
-// 3. Response Portal Data MK (Ditambahkan properti otp sesuai spesifikasi backend)[cite: 8]
+// 3. Response Portal Data MK (Ditambahkan properti otp sesuai spesifikasi backend)
 export interface MkPortalResponse {
   state: string;
   contact_name: string;
   expires_at: string;
-  otp?: OtpDetails; 
+  otp?: OtpDetails;
   permit: PermitDetail;
 }
 
@@ -59,10 +95,10 @@ export interface OtpResponse {
 }
 
 // ----------------------------------------------------
-// API Methods (Publik tanpa Header Auth)[cite: 7]
+// API Methods (Publik tanpa Header Auth)
 // ----------------------------------------------------
 
-// 1. Get Portal Data (Satu-satunya yang dipanggil saat halaman dimuat)[cite: 8]
+// 1. Get Portal Data (Satu-satunya yang dipanggil saat halaman dimuat)
 export const getMkPortalData = async (token: string): Promise<MkPortalResponse> => {
   const response = await publicApi.get<MkPortalResponse>(`/mk/${token}/`);
   return response.data;
@@ -76,16 +112,16 @@ export const sendMkOtp = async (token: string): Promise<OtpResponse> => {
 
 // 3. Setujui Permohonan oleh MK
 export const approveMkPermit = async (
-  token: string, 
+  token: string,
   payload: { otp: string; full_name: string; remarks?: string }
 ) => {
   const response = await publicApi.post(`/mk/${token}/approve/`, payload);
   return response.data;
 };
 
-// 4. Tolak Permohonan oleh MK (Remarks wajib)[cite: 8]
+// 4. Tolak Permohonan oleh MK (Remarks wajib)
 export const rejectMkPermit = async (
-  token: string, 
+  token: string,
   payload: { otp: string; full_name: string; remarks: string }
 ) => {
   const response = await publicApi.post(`/mk/${token}/reject/`, payload);
